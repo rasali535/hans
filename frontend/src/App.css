@@ -1,34 +1,194 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* ForgeSight — industrial brutalist theme */
+
+@import url('https://fonts.googleapis.com/css2?family=Chivo:wght@300;400;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  --fs-bg: #0A0A0A;
+  --fs-surface: #141416;
+  --fs-surface-2: #1a1a1d;
+  --fs-border: rgba(255, 255, 255, 0.1);
+  --fs-border-strong: rgba(255, 255, 255, 0.2);
+  --fs-red: #ED1C24;
+  --fs-red-hot: #FF3B30;
+  --fs-amber: #F59E0B;
+  --fs-green: #10B981;
+  --fs-text: #FFFFFF;
+  --fs-text-mute: #A1A1AA;
+  --fs-text-dim: #71717A;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.App {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  background: var(--fs-bg);
+  color: var(--fs-text);
+  letter-spacing: 0.005em;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.font-display { font-family: 'Chivo', sans-serif; }
+.font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+/* Selection */
+::selection {
+  background: var(--fs-red);
+  color: #fff;
 }
 
-.App-link {
-    color: #61dafb;
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0A0A0A; }
+::-webkit-scrollbar-thumb { background: #2a2a2d; border: 2px solid #0A0A0A; }
+::-webkit-scrollbar-thumb:hover { background: var(--fs-red); }
+
+/* Industrial scanline overlay for agent console */
+.fs-scanlines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(255, 255, 255, 0.015) 2px,
+    rgba(255, 255, 255, 0.015) 3px
+  );
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Grid dots texture */
+.fs-grid-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Technical corner tick marks */
+.fs-corners {
+  position: relative;
+}
+.fs-corners::before,
+.fs-corners::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: var(--fs-red);
+  border-style: solid;
+  border-width: 0;
+}
+.fs-corners::before {
+  top: -1px; left: -1px;
+  border-top-width: 1px; border-left-width: 1px;
+}
+.fs-corners::after {
+  bottom: -1px; right: -1px;
+  border-bottom-width: 1px; border-right-width: 1px;
+}
+
+/* Blinking terminal cursor */
+.fs-cursor::after {
+  content: '▊';
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--fs-red);
+  animation: fs-blink 1s steps(2) infinite;
+}
+@keyframes fs-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Boot / entrance fade + slide */
+.fs-rise {
+  animation: fs-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes fs-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Pill button */
+.fs-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.65rem 1.1rem;
+  border: 1px solid var(--fs-border-strong);
+  background: transparent;
+  color: #fff;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+  cursor: pointer;
+}
+.fs-btn:hover { border-color: var(--fs-red); color: var(--fs-red); }
+.fs-btn-primary {
+  background: var(--fs-red);
+  border-color: var(--fs-red);
+  color: #fff;
+}
+.fs-btn-primary:hover { background: var(--fs-red-hot); border-color: var(--fs-red-hot); color: #fff; }
+
+/* Tag chip */
+.fs-chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--fs-border-strong);
+  color: var(--fs-text-mute);
+}
+.fs-chip-pass { color: var(--fs-green); border-color: rgba(16, 185, 129, 0.4); }
+.fs-chip-warn { color: var(--fs-amber); border-color: rgba(245, 158, 11, 0.4); }
+.fs-chip-fail { color: var(--fs-red); border-color: rgba(237, 28, 36, 0.5); }
+
+/* Label */
+.fs-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fs-text-dim);
+}
+
+/* Dashed divider */
+.fs-hr {
+  border: none;
+  border-top: 1px dashed var(--fs-border);
+  margin: 0;
+}
+
+/* Hero headline stroke effect */
+.fs-stroke {
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.25);
+  color: transparent;
+}
+
+/* Drop zone */
+.fs-drop {
+  border: 1px dashed var(--fs-border-strong);
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+.fs-drop.fs-drop-active {
+  border-color: var(--fs-red);
+  background-color: rgba(237, 28, 36, 0.05);
+}
+
+/* Minor utility */
+.fs-mono-small { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; letter-spacing: 0.1em; }
+
+/* Telemetry bar */
+.fs-bar {
+  height: 4px;
+  background: var(--fs-border);
+  overflow: hidden;
+}
+.fs-bar > div {
+  height: 100%;
+  background: var(--fs-red);
+  transition: width 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Keyboard style */
+kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border: 1px solid var(--fs-border-strong);
+  background: #18181b;
+  color: var(--fs-text-mute);
 }
