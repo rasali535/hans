@@ -1,0 +1,106 @@
+{
+  "project_name": "ForgeSight",
+  "domain": "Manufacturing / AI Quality Control / Developer Tool",
+  "theme": "Dark",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) - Technical Brutalist variant",
+  "mood": "Precise, authoritative, industrial, hardware-optimized, slightly brutalist",
+  "colors": {
+    "background_base": "#0A0A0A",
+    "background_surface": "#141416",
+    "primary_accent": "#ED1C24",
+    "primary_hover": "#FF3B30",
+    "border_default": "rgba(255,255,255,0.1)",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "status": {
+      "pass": "#10B981",
+      "warn": "#F59E0B",
+      "fail": "#ED1C24"
+    }
+  },
+  "typography": {
+    "headings": {
+      "family": "Chivo",
+      "weights": [
+        "300",
+        "900"
+      ],
+      "classes_h1": "text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter leading-none text-white",
+      "classes_h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white",
+      "classes_h3": "text-xl sm:text-2xl font-semibold text-white"
+    },
+    "body": {
+      "family": "IBM Plex Sans",
+      "weights": [
+        "400",
+        "500"
+      ],
+      "classes": "text-base leading-relaxed tracking-normal text-zinc-300"
+    },
+    "mono": {
+      "family": "JetBrains Mono",
+      "weights": [
+        "400",
+        "700"
+      ],
+      "classes": "text-sm tracking-tight font-mono text-zinc-300"
+    },
+    "labels": {
+      "classes": "text-xs font-mono uppercase tracking-[0.2em] text-zinc-400"
+    }
+  },
+  "layout_and_spacing": {
+    "philosophy": "Industrial-HMI meets Linear. Dense information with purposeful whitespace and strict grid alignments.",
+    "bento_grid": {
+      "dashboard_mode": "Control Room Grid (Tight gaps: gap-4 or gap-6, col-span logic for metrics vs feeds)",
+      "marketing_mode": "Tetris Grid (Asymmetric, wide gaps: gap-8, col-span-full for hero elements)"
+    },
+    "spacing_scale": "Tailwind standard (p-4, p-6, p-8). Cards must use internal p-6. Footers use py-24."
+  },
+  "surfaces": {
+    "dashboards": {
+      "style": "Grid Borders (Technical Look)",
+      "rules": "Expose the skeleton. border-collapse layouts, 1px subtle borders (border-white/10), flat backgrounds, no soft shadows."
+    },
+    "agent_console": {
+      "style": "Retro-Futurism / Terminal HMI",
+      "rules": "Deep black #000000 background, neon red borders for active states, monospace fonts, CSS repeating-linear-gradient for subtle scanlines."
+    },
+    "navigation": {
+      "style": "Solid / Linear",
+      "rules": "Solid #0A0A0A background with hard 1px bottom border (border-white/10). Pill-style route switcher."
+    }
+  },
+  "components_strategy": {
+    "html_tailwind": "Use for Marketing/Hero sections (custom pure HTML/Tailwind) for maximum asymmetry.",
+    "shadcn_ui": "Use heavily customized Shadcn for App/Dashboard interactions (Tabs, Dropdowns, Tables, Cards). Override soft corners to max rounded-sm (2px) or rounded-none.",
+    "buttons": "Flat, angular. Primary CTA uses AMD Red background, white text. No rounded-full (use rounded-none or rounded-sm). Hover state must transition background to lighter red (#FF3B30).",
+    "animations": "Minimalist micro-interactions. Blinking cursor for agent streaming. Smooth fade-ins for bento cards."
+  },
+  "media_and_images": {
+    "hero_inspection": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/d5829a2e-bc03-4880-adcd-73acc809a3bd/images/184a8bf32b150669152ea3aa72546730d8caad845b1b8eb0233eeb35e4255eeb.png",
+      "description": "Macro shot of industrial inspection. Use as background for the main hero section with a bg-black/60 overlay for text contrast."
+    },
+    "blueprint_architecture": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/d5829a2e-bc03-4880-adcd-73acc809a3bd/images/7251062dc0e36ea4218374b05cc959bc4e6c55a2cf4789a8a2cbc38db6392916.png",
+      "description": "Abstract 3D AMD MI300X chip architecture. Use in the 'Deployment Blueprint' section."
+    },
+    "factory_feed": {
+      "url": "https://images.unsplash.com/photo-1720036237334-9263cd28c3d4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njl8MHwxfHNlYXJjaHwyfHxpbmR1c3RyaWFsJTIwbWFudWZhY3R1cmluZyUyMGFzc2VtYmx5JTIwbGluZSUyMGRhcmt8ZW58MHx8fHwxNzc3NjQ5MzQzfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Background for Defect Feed empty states or generic manufacturing imagery."
+    }
+  },
+  "icons_and_testing": {
+    "icon_library": "lucide-react (Default, fine for technical interfaces)",
+    "testing": "All interactive elements MUST have data-testid attributes (e.g. data-testid='upload-inspection-button')."
+  },
+  "instructions_to_main_agent": [
+    "Build the app as a hybrid: Marketing Hero at the top, followed by the Dashboard Console below.",
+    "Do NOT use the color teal, purple, or generic SaaS blue anywhere.",
+    "Enforce the 'Grid Borders' surface look for the dashboard parts to make it feel like an industrial HMI.",
+    "For the Agent Console, implement a typing/streaming effect with JetBrains Mono to simulate live inference.",
+    "Use data-testid on every interactive UI piece.",
+    "In the Blueprint diagram section, use standard CSS grid to layer the visual elements over the blueprint_architecture image."
+  ]
+}
