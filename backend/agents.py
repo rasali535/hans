@@ -8,7 +8,8 @@ import json
 import uuid
 import re
 from typing import Optional, List, Dict, Any
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+# Removed emergentintegrations import
+
 
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
@@ -97,25 +98,47 @@ async def _run_agent(
     image_base64: Optional[str] = None,
     provider_model: tuple = TEXT_MODEL,
 ) -> Dict[str, Any]:
-    session_id = f"forgesight-{name}-{uuid.uuid4().hex[:8]}"
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=session_id,
-        system_message=system_message,
-    ).with_model(provider_model[0], provider_model[1])
-
-    if image_base64:
-        msg = UserMessage(
-            text=user_text,
-            file_contents=[ImageContent(image_base64=image_base64)],
-        )
-    else:
-        msg = UserMessage(text=user_text)
-
-    raw = await chat.send_message(msg)
-    raw_str = raw if isinstance(raw, str) else str(raw)
-    parsed = _extract_json(raw_str)
-    return {"raw": raw_str, "parsed": parsed}
+    # MOCKED for preview
+    import asyncio
+    await asyncio.sleep(0.5)
+    
+    parsed = {}
+    if name == "inspector":
+        parsed = {
+            "verdict": "warn",
+            "confidence": 0.85,
+            "defects": [
+                {"type": "surface-scratch", "severity": "low", "location": "top-left edge", "description": "Minor scratch visible"}
+            ],
+            "observation": "I can see a minor scratch on the surface."
+        }
+    elif name == "diagnostician":
+        parsed = {
+            "probable_cause": "Improper handling during milling.",
+            "contributing_factors": ["Machine calibration", "Operator error"],
+            "affected_process_step": "CNC milling"
+        }
+    elif name == "action":
+        parsed = {
+            "priority": "P2",
+            "assignee_role": "quality-engineer",
+            "steps": ["Inspect machine", "Recalibrate"],
+            "estimated_minutes": 30,
+            "parts_or_tools": ["Calibration kit"]
+        }
+    elif name == "reporter":
+        parsed = {
+            "headline": "Minor Scratch Detected",
+            "summary": "A minor scratch was detected during the milling process.",
+            "tags": ["scratch", "milling"]
+        }
+    elif name == "social":
+        parsed = {
+            "x_post": "Testing our pipeline #AMDHackathon",
+            "linkedin_post": "We are testing our pipeline today..."
+        }
+    
+    return {"raw": json.dumps(parsed), "parsed": parsed}
 
 
 async def run_pipeline(
