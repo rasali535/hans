@@ -60,12 +60,13 @@ def api_inspect(image_base64: str, notes: str = "", product_spec: str = ""):
 def api_get_telemetry():
     import random
     return {
-        "gpu_utilization": random.randint(65, 95),
+        "gpu_util_pct": float(random.randint(65, 95)),
         "vram_used_gb": round(random.uniform(140.0, 185.0), 1),
         "vram_total_gb": 192.0,
-        "temperature_c": random.randint(55, 72),
+        "temp_c": float(random.randint(55, 72)),
         "power_watts": random.randint(350, 600),
-        "token_throughput": random.randint(85, 120)
+        "tokens_per_sec": random.randint(85, 120),
+        "device": "AMD Instinct MI300X"
     }
 
 # ── FASTAPI SETUP ───────────────────────────────────────────────────────────
@@ -131,28 +132,21 @@ with gr.Blocks() as demo:
     gr.Markdown("# ForgeSight Gradio API Bridge")
     gr.JSON(label="Live Metrics", value=lambda: metrics, every=5)
 
-# Mount Gradio AT THE END or at a specific path
 gr.mount_gradio_app(app, demo, path="/gradio")
 
 # ── STATIC FRONTEND SERVING ─────────────────────────────────────────────────
 
 if os.path.exists("build"):
-    # Serve static assets (js, css, images)
     app.mount("/static", StaticFiles(directory="build/static"), name="static")
     
-    # Serve the main index.html for the root and all other non-API routes
     @app.get("/{rest_of_path:path}")
     async def serve_react(rest_of_path: str):
-        # If it's a known API path, let FastAPI handle it (though FastAPI routes take precedence anyway)
         if rest_of_path.startswith("api") or rest_of_path.startswith("gradio"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         
-        # Check if the file exists (e.g. favicon.ico, manifest.json)
         file_path = os.path.join("build", rest_of_path)
         if os.path.isfile(file_path):
             return FileResponse(file_path)
-            
-        # Otherwise, serve the React app (Client-side routing)
         return FileResponse("build/index.html")
 
 if __name__ == "__main__":
