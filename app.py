@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import our agent pipeline
-from agents import run_pipeline, AMD_INFERENCE_URL, AMD_MODEL_NAME
+from agents import run_pipeline, AMD_INFERENCE_URL, AMD_MODEL_NAME, AMD_INFERENCE_TOKEN
 
 # ── MONGODB PERSISTENCE (optional, falls back to in-memory) ──────────────────
 MONGO_URL = os.getenv("MONGO_URL", "")
@@ -138,9 +138,13 @@ async def api_get_telemetry():
     t = time.time()
     status = "Connected"
     error_msg = None
+    headers = {}
+    if AMD_INFERENCE_TOKEN:
+        headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
+
     try:
         async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{AMD_INFERENCE_URL}/v1/models")
+            resp = await client.get(f"{AMD_INFERENCE_URL}/v1/models", headers=headers)
             if resp.status_code != 200:
                 status = "Limited"
                 error_msg = f"HTTP {resp.status_code}"
