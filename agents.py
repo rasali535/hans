@@ -19,8 +19,14 @@ import httpx  # async HTTP — lightweight, no extra deps beyond requirements
 # Or use the Jupyter proxy route: http://129.212.191.163/proxy/8000
 AMD_INFERENCE_URL = os.environ.get(
     "AMD_INFERENCE_URL",
-    "http://129.212.191.163:8000"
+    "http://129.212.184.42:8000"
 ).rstrip("/")
+
+# Token for the AMD inference server (if required)
+AMD_INFERENCE_TOKEN = os.environ.get(
+    "AMD_INFERENCE_TOKEN",
+    "sr49urlf/6cgbSvhp8lg1EyTiHd2VvsOa6dev8Rc/vfK83fra"
+)
 
 # The model name vLLM is serving (used in the chat/completions request).
 # Override with AMD_MODEL_NAME env var if you deploy a different checkpoint.
@@ -180,10 +186,13 @@ async def _call_amd_vllm(
     }
 
     url = f"{AMD_INFERENCE_URL}/v1/chat/completions"
+    headers = {}
+    if AMD_INFERENCE_TOKEN:
+        headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
 
     try:
         async with httpx.AsyncClient(timeout=AMD_TIMEOUT) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"]
