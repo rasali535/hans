@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { forgesight, fileToBase64 } from "@/lib/api";
 import TelemetryWidget from "@/components/TelemetryWidget";
 import AgentTranscript from "@/components/AgentTranscript";
+import ReportDownloader from "@/components/ReportDownloader";
 
 export default function Console() {
   const [file, setFile] = useState(null);
@@ -13,7 +14,8 @@ export default function Console() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [dragActive, setDragActive] = useState(false);
-  const inputRef = useRef(null);
+  const inputRef    = useRef(null);
+  const reportRef   = useRef(null);
 
   const handleFile = useCallback((f) => {
     if (!f) return;
@@ -174,13 +176,22 @@ export default function Console() {
         </div>
 
         {/* RIGHT — transcript */}
-        <div className="lg:col-span-7 space-y-6">
+        <div className="lg:col-span-7 space-y-6" ref={reportRef}>
           {summary && (
-            <div className="border border-white/10 bg-[#141416] p-5 grid grid-cols-2 md:grid-cols-4 gap-4 fs-rise" data-testid="summary-panel">
-              <SummaryStat label="Verdict" value={summary.verdict.toUpperCase()} kind={summary.verdict} />
-              <SummaryStat label="Confidence" value={`${Math.round(summary.confidence * 100)}%`} />
-              <SummaryStat label="Defects" value={summary.defect_count} />
-              <SummaryStat label="Priority" value={summary.priority} />
+            <div className="border border-white/10 bg-[#141416] p-5 fs-rise" data-testid="summary-panel">
+              <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
+                  <SummaryStat label="Verdict" value={summary.verdict.toUpperCase()} kind={summary.verdict} />
+                  <SummaryStat label="Confidence" value={`${Math.round(summary.confidence * 100)}%`} />
+                  <SummaryStat label="Defects" value={summary.defect_count} />
+                  <SummaryStat label="Priority" value={summary.priority} />
+                </div>
+                <ReportDownloader
+                  targetRef={reportRef}
+                  inspectionId={result?.id}
+                  disabled={!result}
+                />
+              </div>
             </div>
           )}
 
