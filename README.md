@@ -6,7 +6,7 @@ colorTo: gray
 sdk: docker
 pinned: true
 license: mit
-short_description: "Multimodal QC Copilot · AMD MI300X · Qwen2-VL · 4-Agent Pipeline"
+short_description: "Multimodal QC Copilot · AMD MI300X · Qwen2-VL"
 tags:
   - amd
   - rocm
