@@ -14,6 +14,14 @@ from typing import Optional, List, Dict, Any
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 
+# AMD MI300X inference server (fine-tuned compliance model)
+# Jupyter proxy route used since direct port 8000 is firewalled.
+# Override with AMD_INFERENCE_URL env var if direct access is available.
+AMD_INFERENCE_URL = os.environ.get(
+    "AMD_INFERENCE_URL",
+    "http://129.212.191.163/proxy/8000"
+)
+
 # Model choices — Claude Sonnet 4.5 is vision-capable and strong for reasoning.
 VISION_MODEL = ("anthropic", "claude-sonnet-4-5-20250929")
 TEXT_MODEL = ("anthropic", "claude-sonnet-4-5-20250929")
@@ -91,6 +99,66 @@ def _extract_json(raw: str) -> Dict[str, Any]:
     return {"_raw": raw}
 
 
+def _build_prompt(system_message: str, user_text: str) -> str:
+    return f"<|system|>{system_message}<|user|>{user_text}<|assistant|>"
+
+
+def _mock_response(name: str) -> Dict[str, Any]:
+    """Fallback mock responses for local development (AMD server not running)."""
+    mocks = {
+        "inspector": {
+            "verdict": "warn", "confidence": 0.85,
+            "defects": [{"type": "surface-scratch", "severity": "low", "location": "top-left edge", "description": "Minor scratch visible"}],
+            "observation": "Minor scratch detected on surface. [LOCAL MOCK — AMD server offline]"
+        },
+        "diagnostician": {
+            "probable_cause": "Improper handling during milling. [LOCAL MOCK]",
+            "contributing_factors": ["Machine calibration", "Operator error"],
+            "affected_process_step": "CNC milling"
+        },
+        "action": {
+            "priority": "P2", "assignee_role": "quality-engineer",
+            "steps": ["Inspect machine", "Recalibrate"],
+            "estimated_minutes": 30, "parts_or_tools": ["Calibration kit"]
+        },
+        "reporter": {
+            "headline": "Minor Scratch Detected [Mock]",
+            "summary": "Local mock response — start the AMD inference server to use the fine-tuned compliance model.",
+            "tags": ["scratch", "mock", "local"]
+        },
+        "social": {
+            "x_post": "Testing our pipeline #AMDHackathon",
+            "linkedin_post": "We are testing our pipeline today..."
+        },
+    }
+    parsed = mocks.get(name, {})
+    return {"raw": json.dumps(parsed), "parsed": parsed, "source": "mock"}
+
+
+async def _call_amd_server(prompt: str) -> Optional[str]:
+    """Call the fine-tuned model running on AMD MI300X. Returns None if unreachable."""
+    import asyncio
+    import urllib.request
+    import urllib.error
+
+    payload = json.dumps({"prompt": prompt, "max_tokens": 512}).encode()
+    req = urllib.request.Request(
+        f"{AMD_INFERENCE_URL}/v1/complete",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        loop = asyncio.get_event_loop()
+        def _do_request():
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read())
+        result = await loop.run_in_executor(None, _do_request)
+        return result.get("text", "")
+    except Exception:
+        return None  # Server offline — caller will use mock
+
+
 async def _run_agent(
     name: str,
     system_message: str,
@@ -98,47 +166,26 @@ async def _run_agent(
     image_base64: Optional[str] = None,
     provider_model: tuple = TEXT_MODEL,
 ) -> Dict[str, Any]:
-    # MOCKED for preview
+    """
+    Run an agent. Tries the AMD MI300X fine-tuned model first.
+    Falls back to mock responses automatically if the server is not running
+    (e.g. local development without the AMD instance active).
+    """
     import asyncio
-    await asyncio.sleep(0.5)
-    
-    parsed = {}
-    if name == "inspector":
-        parsed = {
-            "verdict": "warn",
-            "confidence": 0.85,
-            "defects": [
-                {"type": "surface-scratch", "severity": "low", "location": "top-left edge", "description": "Minor scratch visible"}
-            ],
-            "observation": "I can see a minor scratch on the surface."
-        }
-    elif name == "diagnostician":
-        parsed = {
-            "probable_cause": "Improper handling during milling.",
-            "contributing_factors": ["Machine calibration", "Operator error"],
-            "affected_process_step": "CNC milling"
-        }
-    elif name == "action":
-        parsed = {
-            "priority": "P2",
-            "assignee_role": "quality-engineer",
-            "steps": ["Inspect machine", "Recalibrate"],
-            "estimated_minutes": 30,
-            "parts_or_tools": ["Calibration kit"]
-        }
-    elif name == "reporter":
-        parsed = {
-            "headline": "Minor Scratch Detected",
-            "summary": "A minor scratch was detected during the milling process.",
-            "tags": ["scratch", "milling"]
-        }
-    elif name == "social":
-        parsed = {
-            "x_post": "Testing our pipeline #AMDHackathon",
-            "linkedin_post": "We are testing our pipeline today..."
-        }
-    
-    return {"raw": json.dumps(parsed), "parsed": parsed}
+    await asyncio.sleep(0.1)
+
+    prompt = _build_prompt(system_message, user_text)
+    raw_text = await _call_amd_server(prompt)
+
+    if raw_text is None:
+        # AMD server not reachable — use local mock (safe for dev)
+        result = _mock_response(name)
+        result["source"] = "mock (AMD server offline)"
+        return result
+
+    # AMD server responded — parse its JSON output
+    parsed = _extract_json(raw_text)
+    return {"raw": raw_text, "parsed": parsed, "source": f"AMD MI300X @ {AMD_INFERENCE_URL}"}
 
 
 async def run_pipeline(

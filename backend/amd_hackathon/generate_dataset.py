@@ -5,35 +5,35 @@ from pathlib import Path
 
 # We will save the data to the 'data' directory relative to where the script is run
 OUTPUT_DIR = Path("data")
-OUTPUT_FILE = OUTPUT_DIR / "engineering_specs_synthetic.jsonl"
+OUTPUT_FILE = OUTPUT_DIR / "infrastructure_compliance.jsonl"
 
-# Sample synthetic data templates focused on Technical Engineering Specs
-SYSTEM_PROMPT = "You are an expert industrial diagnostic AI. Given an engineering defect report or visual observation, you must reference technical specifications and provide a highly accurate diagnostic verdict, severity, and remediation steps."
+# Synthetic data templates focused on Infrastructure Standards (Eurocodes, ASTM, ISO 9001)
+# and 'Violation Reasoning'
+SYSTEM_PROMPT = "You are an expert infrastructure compliance auditor. Given a technical description of a construction element, compare it against relevant engineering standards (Eurocodes, ASTM Standards, ISO 9001) to identify any violations. You must output the label 'Compliant' or 'Non-Compliant' followed by a detailed reasoning trace."
 
 SYNTHETIC_SAMPLES = [
     {
-        "user": "I am looking at a steel beam (Grade A36) with visible surface micro-fractures near the weld joint. The load bearing requirement is 50 kN.",
-        "assistant": "According to structural engineering standard AWS D1.1, micro-fractures near a weld joint on ASTM A36 steel indicate potential hydrogen-induced cracking or rapid cooling stress. Given the 50 kN load requirement, this poses a critical structural risk. \n\n**Verdict**: FAIL\n**Severity**: CRITICAL\n**Remediation**: Immediate halt of load bearing. Recommend ultrasonic testing (UT) to determine crack depth and subsequent re-welding using low-hydrogen electrodes."
+        "user": "A bridge pier is constructed using concrete with a compressive strength of 25 MPa. It is exposed to a severe marine environment (XS3 exposure class).",
+        "assistant": "**Label**: Non-Compliant\n\n**Reasoning Trace**: According to Eurocode 2 (EN 1992-1-1), structures in exposure class XS3 (tidal, splash, and spray zones in marine environments) require a minimum concrete strength class of C35/45 to ensure adequate durability and resistance to chloride-induced corrosion. The provided compressive strength of 25 MPa (C25/30) is insufficient for this exposure class, violating the structural code requirements."
     },
     {
-        "user": "The printed circuit board (PCB) shows solder bridging between pins 4 and 5 of the main microcontroller (STM32).",
-        "assistant": "Solder bridging between pins 4 and 5 constitutes a short circuit, violating IPC-A-610 Class 3 standards for high-reliability electronic assemblies. \n\n**Verdict**: FAIL\n**Severity**: HIGH\n**Remediation**: Rework required. Apply flux and use a desoldering braid or hot air rework station to remove the excess solder. Inspect adjacent pins for thermal damage."
+        "user": "The quality management system documentation includes a calibration record for the torque wrenches used on the primary structural steel connections. The calibration was performed 6 months ago, and the required interval is 12 months.",
+        "assistant": "**Label**: Compliant\n\n**Reasoning Trace**: Under ISO 9001:2015 Clause 7.1.5 (Monitoring and measuring resources), organizations must retain appropriate documented information as evidence of fitness for purpose of monitoring and measurement resources. The torque wrenches are calibrated within the required 12-month interval (performed 6 months ago), satisfying the quality management standard for infrastructure construction."
     },
     {
-        "user": "Visual inspection of the hydraulic turbine blade shows a 2mm pitting corrosion spot on the leading edge. Material is Titanium alloy.",
-        "assistant": "Pitting corrosion of 2mm on the leading edge of a Titanium alloy hydraulic turbine blade exceeds the operational tolerance outlined in ISO 11366. It disrupts hydrodynamic efficiency and can lead to cavitation erosion over time.\n\n**Verdict**: WARN\n**Severity**: MEDIUM\n**Remediation**: Flag for scheduled maintenance. The pitting should be ground smooth and re-coated with an anti-cavitation protective layer during the next service cycle."
+        "user": "Structural steel beams are connected using high-strength structural bolts (ASTM A325). The bolts are installed using the snug-tightened method for a slip-critical connection.",
+        "assistant": "**Label**: Non-Compliant\n\n**Reasoning Trace**: In accordance with the AISC Specification and ASTM standards for structural joints using high-strength bolts, slip-critical connections require bolts to be fully tensioned (e.g., using turn-of-nut, calibrated wrench, or direct tension indicators). The snug-tightened method is only permitted for bearing-type connections where slip is acceptable. Using snug-tightened bolts for a slip-critical connection violates the installation standard and poses a risk of joint failure under service loads."
     },
     {
-        "user": "Engine gasket seal appears slightly discolored but maintains full contact and no pressure leak detected during the 100psi test.",
-        "assistant": "Discoloration of the gasket without pressure loss at 100psi is within acceptable limits for standard thermal wear per manufacturer baseline specs. No functional impairment is detected.\n\n**Verdict**: PASS\n**Severity**: LOW\n**Remediation**: No immediate action required. Continue standard monitoring."
+        "user": "Reinforcing steel (rebar) for the foundation mat is specified as ASTM A615 Grade 60. The rebar is delivered with mill test reports confirming a minimum yield strength of 60,000 psi.",
+        "assistant": "**Label**: Compliant\n\n**Reasoning Trace**: ASTM A615 Grade 60 requires deformed carbon-steel bars for concrete reinforcement to have a minimum yield strength of 60,000 psi. The mill test reports confirm that the delivered material meets this mechanical property requirement, ensuring it complies with the specified ASTM standard for the foundation mat."
     }
 ]
 
 def generate_dataset(num_samples: int = 100):
     """
-    Generates a synthetic JSONL dataset formatted in ChatML.
-    In a real scenario, you could use an LLM API (e.g. GPT-4 or Claude 3.5 Sonnet) 
-    in a loop here to generate thousands of diverse examples.
+    Generates a synthetic JSONL dataset formatted in ChatML for Axolotl fine-tuning.
+    Focuses on 'Violation Reasoning' for Infrastructure Compliance.
     """
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     
@@ -41,8 +41,8 @@ def generate_dataset(num_samples: int = 100):
     
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         for _ in range(num_samples):
-            # For demonstration, we just randomly sample from our templates
-            # A real generator would use an LLM to generate variations
+            # For demonstration, we randomly sample from our templates.
+            # In production, an LLM pipeline could generate varied scenarios.
             sample = random.choice(SYNTHETIC_SAMPLES)
             
             chatml_format = {
