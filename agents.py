@@ -15,17 +15,17 @@ import httpx  # async HTTP — lightweight, no extra deps beyond requirements
 # ── AMD vLLM inference endpoint ─────────────────────────────────────────────
 # vLLM exposes an OpenAI-compatible API at /v1/chat/completions.
 # Set AMD_INFERENCE_URL in your .env to point at the running vLLM server.
-# Example: http://129.212.191.163:8000   (direct port — ensure firewall allows it)
+# Example: http://129.212.191.163   (direct port — ensure firewall allows it)
 # Or use the Jupyter proxy route: http://129.212.191.163/proxy/8000
 AMD_INFERENCE_URL = os.environ.get(
     "AMD_INFERENCE_URL",
-    "http://129.212.184.42"
+    "http://165.245.143.46:8000"
 ).rstrip("/")
 
 # Token for the AMD inference server (if required)
 AMD_INFERENCE_TOKEN = os.environ.get(
     "AMD_INFERENCE_TOKEN",
-    "sr49urlf/6cgbSvhp8lg1EyTiHd2VvsOa6dev8Rc/vfK83fra"
+    "5peRa6unb0DdXvzB3Pbck48IgNTDmxeJSUvE4NdnhvW70FcaX"
 )
 
 # The model name vLLM is serving (used in the chat/completions request).
@@ -33,7 +33,7 @@ AMD_INFERENCE_TOKEN = os.environ.get(
 AMD_MODEL_NAME = os.environ.get("AMD_MODEL_NAME", "Qwen/Qwen2-VL-7B-Instruct")
 
 # Timeout (seconds) to wait for the AMD server before falling back to mock.
-AMD_TIMEOUT = float(os.environ.get("AMD_TIMEOUT", "30"))
+AMD_TIMEOUT = float(os.environ.get("AMD_TIMEOUT", "60"))
 
 # ── System prompts ───────────────────────────────────────────────────────────
 INSPECTOR_SYSTEM = """You are the INSPECTOR agent of ForgeSight — a multimodal quality-control copilot

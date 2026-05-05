@@ -23,6 +23,12 @@ tags:
 
 # 🔍 ForgeSight — Multimodal Quality-Control Copilot
 
+### ⚡ Live Status (Hackathon Mode)
+- **Primary Inference**: AMD Instinct MI300X (192GB VRAM)
+- **Backend**: FastAPI + vLLM on ROCm
+- **Current Server**: `165.245.143.46` (vLLM via Token Auth)
+- **Status**: ✅ **ONLINE** (Live Inference Active)
+
 > **AMD + lablab.ai Hackathon** — Track 2 (AMD Developer Cloud) · Track 1 (AI Agents) · Track 3 (Vision & Multimodal AI)
 
 ForgeSight is a production-ready AI system that performs automated visual quality control on the **AMD Instinct MI300X** GPU. Upload a product image and a 4-agent agentic pipeline delivers a structured defect report in seconds.
