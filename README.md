@@ -8,7 +8,7 @@ sdk_version: 5.29.1
 app_file: app.py
 pinned: true
 license: mit
-short_description: "Multimodal QC Copilot — 4-agent pipeline on AMD MI300X + ROCm"
+short_description: "Multimodal QC Copilot on AMD MI300X + ROCm"
 tags:
   - amd
   - rocm
