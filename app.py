@@ -155,18 +155,39 @@ async def handle_inspect(request: Request):
 
 @app.post("/api/list_inspections")
 async def handle_list(request: Request):
-    return {"data": [_inspections[:50]]}
+    return {"data": [{"items": _inspections[:50]}]}
 
 @app.post("/api/metrics")
 async def handle_metrics(request: Request):
     total = len(_inspections)
-    anomalies = sum(1 for doc in _inspections if _summarize(doc)["verdict"] in ["warn", "fail"])
+    verdict_counts = {"pass": 0, "warn": 0, "fail": 0}
+    confidences = []
+    defect_map = {}
+
+    for doc in _inspections:
+        summary = _summarize(doc)
+        v = summary["verdict"]
+        if v in verdict_counts:
+            verdict_counts[v] += 1
+        confidences.append(summary["confidence"])
+        
+        # Track defects for the 'Top Defects' chart
+        inspector_out = (doc.get("transcript", {}).get("agents", [{}])[0] or {}).get("output", {}).get("parsed", {}) or {}
+        for d in inspector_out.get("defects", []):
+            d_type = d.get("type", "Unknown")
+            defect_map[d_type] = defect_map.get(d_type, 0) + 1
+
+    top_defects = sorted([{"type": k, "count": v} for k, v in defect_map.items()], key=lambda x: x["count"], reverse=True)[:5]
+    avg_conf = sum(confidences) / total if total > 0 else 0.95
+
     return {"data": [{
         "total_inspections": total,
-        "anomalies_detected": anomalies,
+        "quality_score": round(100 * verdict_counts["pass"] / total) if total > 0 else 100,
+        "avg_confidence": avg_conf,
+        "verdict_counts": verdict_counts,
+        "top_defects": top_defects,
         "uptime_hours": 124.5,
-        "efficiency_gain": 22.4,
-        "quality_score": round(100 * (total - anomalies) / total) if total > 0 else 100
+        "efficiency_gain": 22.4
     }]}
 
 @app.post("/api/telemetry")
@@ -231,12 +252,16 @@ if os.path.exists("build"):
     
     @app.get("/{rest_of_path:path}")
     async def serve_react(rest_of_path: str):
+        # Prevent intercepting API/Gradio calls
         if rest_of_path.startswith("api") or rest_of_path.startswith("gradio"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         
+        # Check if the path points to a real file in build (e.g. static/js/...)
         file_path = os.path.join("build", rest_of_path)
         if os.path.isfile(file_path):
             return FileResponse(file_path)
+        
+        # For everything else (like /feed, /console), serve index.html for React Router
         return FileResponse("build/index.html")
 
 if __name__ == "__main__":
