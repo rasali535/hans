@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { forgesight } from "@/lib/api";
 import { Activity } from "lucide-react";
 
 export default function TelemetryWidget() {
@@ -9,7 +9,7 @@ export default function TelemetryWidget() {
     let alive = true;
     const tick = async () => {
       try {
-        const { data } = await api.get("/telemetry");
+        const data = await forgesight.getTelemetry();
         if (alive) setT(data);
       } catch {}
     };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "@/lib/api";
+import { forgesight } from "@/lib/api";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { AlertTriangle, CheckCircle2, XCircle, TrendingUp } from "lucide-react";
 
@@ -10,9 +10,12 @@ export default function Feed() {
 
   const load = async () => {
     try {
-      const [m, l] = await Promise.all([api.get("/metrics"), api.get("/inspections")]);
-      setMetrics(m.data);
-      setItems(l.data.items || []);
+      const [m, l] = await Promise.all([
+        forgesight.getMetrics(),
+        forgesight.listInspections(),
+      ]);
+      setMetrics(m);
+      setItems(l.items || []);
     } catch {}
   };
 

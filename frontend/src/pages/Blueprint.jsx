@@ -1,14 +1,10 @@
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { forgesight } from "@/lib/api";
 import { Cpu, HardDrive, Server, BookOpen, Bot, Rocket, ArrowDown } from "lucide-react";
 
 const LAYER_ICONS = {
-  Hardware: Cpu,
-  Runtime: HardDrive,
-  Serving: Server,
-  Model: BookOpen,
-  Agents: Bot,
-  Product: Rocket,
+  Hardware: Cpu, Runtime: HardDrive, Serving: Server,
+  Model: BookOpen, Agents: Bot, Product: Rocket,
 };
 
 const BLUEPRINT_IMG = "https://static.prod-images.emergentagent.com/jobs/d5829a2e-bc03-4880-adcd-73acc809a3bd/images/7251062dc0e36ea4218374b05cc959bc4e6c55a2cf4789a8a2cbc38db6392916.png";
@@ -17,7 +13,7 @@ export default function Blueprint() {
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    api.get("/blueprint").then(({ data }) => setData(data)).catch(() => {});
+    forgesight.getBlueprint().then((d) => setData(d)).catch(() => {});
   }, []);
 
   return (
@@ -40,7 +36,6 @@ export default function Blueprint() {
         </div>
       </header>
 
-      {/* Stack layers */}
       <section className="mb-16">
         <div className="fs-label mb-6">Stack · top to bottom</div>
         <div className="border-l-2 border-[#ED1C24] pl-0">
@@ -75,7 +70,6 @@ export default function Blueprint() {
         </div>
       </section>
 
-      {/* Fine-tune recipe */}
       {data?.finetune_recipe && (
         <section className="border border-white/10 bg-[#141416] p-8 fs-corners" data-testid="finetune-recipe">
           <div className="flex items-end justify-between mb-6 flex-wrap gap-3">
@@ -93,7 +87,6 @@ export default function Blueprint() {
             <Cell k="WALL CLOCK" v={data.finetune_recipe.expected_wall_clock} />
             <Cell k="SERVING" v={data.finetune_recipe.serve_with} />
           </div>
-
           <pre className="mt-8 font-mono text-[12px] leading-relaxed text-zinc-300 bg-[#0A0A0A] border border-white/10 p-5 overflow-x-auto">{`# ForgeSight fine-tune — MI300X + ROCm
 docker run --device=/dev/kfd --device=/dev/dri \\
   --security-opt seccomp=unconfined --group-add video \\

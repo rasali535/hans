@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Upload, Image as ImageIcon, PlayCircle, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { api, fileToBase64 } from "@/lib/api";
+import { forgesight, fileToBase64 } from "@/lib/api";
 import TelemetryWidget from "@/components/TelemetryWidget";
 import AgentTranscript from "@/components/AgentTranscript";
 
@@ -42,7 +42,7 @@ export default function Console() {
     setResult(null);
     try {
       const image_base64 = await fileToBase64(file);
-      const { data } = await api.post("/inspections", {
+      const data = await forgesight.createInspection({
         image_base64,
         notes,
         product_spec: spec,
