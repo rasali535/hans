@@ -15,8 +15,8 @@ import httpx  # async HTTP — lightweight, no extra deps beyond requirements
 # ── AMD vLLM inference endpoint ─────────────────────────────────────────────
 # vLLM exposes an OpenAI-compatible API at /v1/chat/completions.
 # Set AMD_INFERENCE_URL in your .env to point at the running vLLM server.
-# Example: http://129.212.191.163   (direct port — ensure firewall allows it)
-# Or use the Jupyter proxy route: http://129.212.191.163/proxy/8000
+# Example: http://165.245.143.46:8000   (direct port — ensure firewall allows it)
+# Or use the Jupyter proxy route: http://165.245.143.46/proxy/8000
 AMD_INFERENCE_URL = os.environ.get(
     "AMD_INFERENCE_URL",
     "http://165.245.143.46:8000"
