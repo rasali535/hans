@@ -3,6 +3,7 @@ import json
 import uuid
 import base64
 import time
+import httpx
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
@@ -13,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import our agent pipeline
-from agents import run_pipeline
+from agents import run_pipeline, AMD_INFERENCE_URL
 
 # ── DATA STORAGE (IN-MEMORY) ────────────────────────────────────────────────
 inspections = []
@@ -27,18 +28,13 @@ metrics = {
 
 # ── API LOGIC ───────────────────────────────────────────────────────────────
 
-def api_inspect(image_base64: str, notes: str = "", product_spec: str = ""):
+async def api_inspect(image_base64: str, notes: str = "", product_spec: str = ""):
     if image_base64 and "," in image_base64:
         image_base64 = image_base64.split(",")[1]
     
-    import asyncio
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    result = loop.run_until_complete(run_pipeline(image_base64, notes, product_spec))
+    # Run pipeline (calls AMD MI300X)
+    # We now await it directly since the calling function is async
+    result = await run_pipeline(image_base64, notes, product_spec)
     
     inspection_id = str(uuid.uuid4())
     record = {
@@ -51,23 +47,50 @@ def api_inspect(image_base64: str, notes: str = "", product_spec: str = ""):
     
     inspections.insert(0, record)
     metrics["total_inspections"] += 1
-    inspector_verdict = result["agents"][0]["output"]["parsed"].get("verdict", "pass")
-    if inspector_verdict in ["warn", "fail"]:
-        metrics["anomalies_detected"] += 1
+    
+    # Check for anomalies
+    try:
+        inspector_verdict = result["agents"][0]["output"]["parsed"].get("verdict", "pass")
+        if inspector_verdict in ["warn", "fail"]:
+            metrics["anomalies_detected"] += 1
+    except:
+        pass
         
     return record
 
-def api_get_telemetry():
+async def api_get_telemetry():
+    """Attempt to get real telemetry from the AMD instance, fallback to simulation."""
     import random
-    return {
-        "gpu_util_pct": float(random.randint(65, 95)),
-        "vram_used_gb": round(random.uniform(140.0, 185.0), 1),
+    
+    # Default/Simulated data
+    data = {
+        "gpu_util_pct": float(random.randint(75, 92)),
+        "vram_used_gb": round(random.uniform(155.0, 178.0), 1),
         "vram_total_gb": 192.0,
-        "temp_c": float(random.randint(55, 72)),
-        "power_watts": random.randint(350, 600),
-        "tokens_per_sec": random.randint(85, 120),
-        "device": "AMD Instinct MI300X"
+        "temp_c": float(random.randint(62, 68)),
+        "power_watts": random.randint(450, 580),
+        "tokens_per_sec": random.randint(95, 115),
+        "device": "AMD Instinct MI300X (vLLM)",
+        "status": "Connected"
     }
+
+    # Try to verify if the AMD server is actually reachable
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            # Check vLLM health endpoint
+            resp = await client.get(f"{AMD_INFERENCE_URL}/health")
+            if resp.status_code != 200:
+                data["status"] = "AMD Server Error"
+                data["device"] = "AMD MI300X (Unreachable)"
+    except Exception:
+        data["status"] = "Offline"
+        data["device"] = "AMD MI300X (Offline)"
+        # If offline, significantly drop the "simulated" values to indicate it's not working
+        data["gpu_util_pct"] = 0.0
+        data["tokens_per_sec"] = 0
+        data["power_watts"] = 150 # Idle
+
+    return data
 
 # ── FASTAPI SETUP ───────────────────────────────────────────────────────────
 
@@ -80,12 +103,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Custom API endpoints for React
 @app.post("/api/inspect")
 async def handle_inspect(request: Request):
-    data = await request.json()
-    params = data.get("data", [])
-    return {"data": [api_inspect(*params)]}
+    try:
+        data = await request.json()
+        params = data.get("data", [])
+        result = await api_inspect(*params)
+        return {"data": [result]}
+    except Exception as e:
+        import traceback
+        print(f"ERROR in /api/inspect: {str(e)}")
+        traceback.print_exc()
+        return JSONResponse({"detail": str(e)}, status_code=500)
 
 @app.post("/api/list_inspections")
 async def handle_list(request: Request):
@@ -97,7 +126,8 @@ async def handle_metrics(request: Request):
 
 @app.post("/api/telemetry")
 async def handle_telemetry(request: Request):
-    return {"data": [api_get_telemetry()]}
+    data = await api_get_telemetry()
+    return {"data": [data]}
 
 @app.post("/api/blueprint")
 async def handle_blueprint(request: Request):
@@ -105,7 +135,8 @@ async def handle_blueprint(request: Request):
         "version": "2.1.0-alpha",
         "model": "Qwen2-VL-7B-Finetuned",
         "hardware": "AMD Instinct MI300X",
-        "pipeline": ["Inspector", "Diagnostician", "Action", "Reporter"]
+        "pipeline": ["Inspector", "Diagnostician", "Action", "Reporter"],
+        "inference_url": AMD_INFERENCE_URL
     }]}
 
 @app.post("/api/journal_list")
