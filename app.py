@@ -249,6 +249,52 @@ async def handle_blueprint(request: Request):
         "inference_url": AMD_INFERENCE_URL,
         "pipeline":      ["Inspector", "Diagnostician", "Action", "Reporter"],
         "persistence":   "MongoDB Atlas" if _inspections_col is not None else "In-Memory (no MONGO_URL set)",
+        "stack": [
+            {
+                "layer":  "Hardware",
+                "title":  "AMD Instinct MI300X",
+                "detail": "192 GB HBM3 · 5.3 TB/s bandwidth",
+                "why":    "The MI300X's massive unified memory pool allows the full Qwen2-VL-7B model to reside in GPU VRAM with headroom for 88× concurrent inference sessions — no CPU offloading needed.",
+            },
+            {
+                "layer":  "Runtime",
+                "title":  "ROCm 7.2.1 + PyTorch 2.10",
+                "detail": "rocm/pytorch:latest · no CUDA required",
+                "why":    "ROCm provides a CUDA-compatible open-source compute stack. PyTorch 2.10 (ROCm build) with torch.compile and FlashAttention-2 gives near-peak throughput on GFX942.",
+            },
+            {
+                "layer":  "Serving",
+                "title":  "vLLM 0.20.1 (ROCm wheels)",
+                "detail": "OpenAI-compatible · /v1/chat/completions",
+                "why":    "vLLM's paged attention + continuous batching allows all four agents to share one GPU process. ROCm-specific wheels ship with AITER kernels tuned for the MI300X memory hierarchy.",
+            },
+            {
+                "layer":  "Model",
+                "title":  "Qwen2-VL-7B-Instruct",
+                "detail": "Qwen/Qwen2-VL-7B-Instruct · bfloat16",
+                "why":    "Qwen2-VL is Alibaba's multimodal vision-language model. It natively understands images + text in a single forward pass, making it ideal for reading product photos and producing structured JSON defect reports.",
+            },
+            {
+                "layer":  "Agents",
+                "title":  "4-Agent Agentic Pipeline",
+                "detail": "Inspector → Diagnostician → Action → Reporter",
+                "why":    "Each agent calls Qwen2-VL with a role-specific system prompt. Outputs are chained: each agent's JSON is injected into the next agent's context, forming a multi-step reasoning chain over a single image.",
+            },
+            {
+                "layer":  "Product",
+                "title":  "ForgeSight Dashboard",
+                "detail": "React 18 · FastAPI · MongoDB Atlas",
+                "why":    "A production-ready QC console deployed on Hugging Face Spaces. Operators upload images, receive verdicts in real-time, and track defect history across inspection runs.",
+            },
+        ],
+        "finetune_recipe": {
+            "base_model":           "Qwen/Qwen2-VL-72B-Instruct",
+            "dataset":              "forgesight/qc-10k (synthetic defect images)",
+            "method":               "QLoRA · LoRA rank 64 · bfloat16",
+            "hardware":             "8× AMD Instinct MI300X · 192 GB each",
+            "expected_wall_clock":  "~3 hours for 3 epochs",
+            "serve_with":           "vLLM --tensor-parallel-size 8",
+        },
     }]}
 
 @app.post("/api/journal_list")
