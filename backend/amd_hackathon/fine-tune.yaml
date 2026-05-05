@@ -1,0 +1,73 @@
+base_model: Qwen/Qwen2.5-32B-Instruct
+model_type: AutoModelForCausalLM
+tokenizer_type: AutoTokenizer
+
+# Target Domain: Technical Engineering Specs (Track 2 Focus)
+load_in_4bit: true
+strict: false
+
+datasets:
+  - path: data/engineering_specs_synthetic.jsonl
+    type: chat_template
+    chat_template: chatml
+
+dataset_prepared_path: last_run_prepared
+val_set_size: 0.05
+output_dir: ./qwen2.5-32b-engineering-lora
+
+# QLoRA Adapter Configuration
+adapter: qlora
+lora_model_dir:
+
+sequence_len: 8192 # Increased sequence length for complex specs
+sample_packing: true
+eval_sample_packing: false
+pad_to_sequence_len: true
+
+lora_r: 64
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_linear: true
+lora_fan_in_fan_out:
+
+wandb_project: rocm-qwen32b-engineering
+wandb_entity:
+wandb_watch:
+wandb_name: mi300x-run-1
+wandb_log_model:
+
+# Training Hyperparameters
+gradient_accumulation_steps: 4
+micro_batch_size: 2
+num_epochs: 3
+optimizer: paged_adamw_32bit
+lr_scheduler: cosine
+learning_rate: 0.0002
+
+train_on_inputs: false
+group_by_length: false
+
+# Hardware Optimization for MI300X (192GB VRAM)
+bf16: auto
+fp16: false
+tf32: false
+gradient_checkpointing: true
+flash_attention: true
+
+# DeepSpeed ZeRO-3 Configuration for distributed VRAM efficiency
+deepspeed: deepspeed_configs/zero3_bf16.json
+
+early_stopping_patience:
+resume_from_checkpoint:
+local_rank:
+logging_steps: 1
+
+warmup_steps: 10
+evals_per_epoch: 4
+eval_table_size:
+eval_max_new_tokens: 128
+saves_per_epoch: 1
+weight_decay: 0.0
+
+special_tokens:
+  pad_token: "<|endoftext|>"
