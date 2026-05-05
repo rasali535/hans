@@ -20,6 +20,7 @@ tags:
 # 🔍 ForgeSight — Multimodal Quality-Control Copilot
 
 This Space hosts the full ForgeSight application:
+
 - **Frontend**: React (served at `/`)
 - **Backend**: FastAPI + Gradio (served at `/gradio` and `/api`)
 - **Inference**: AMD Instinct MI300X via vLLM
