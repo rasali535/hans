@@ -1,17 +1,20 @@
 import axios from "axios";
 
 // ── Backend configuration ────────────────────────────────────────────────────
-// Option A: Traditional FastAPI backend (e.g. localhost:8001)
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+// If running in the browser, we default to the current origin
+const CURRENT_ORIGIN = typeof window !== "undefined" ? window.location.origin : "";
+
+// Option A: Traditional FastAPI backend
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || CURRENT_ORIGIN;
 
 // Option B: Hugging Face Spaces Gradio backend
-// Set this env var to your HF Space URL, e.g.:
-//   https://YOUR-USERNAME-forgesight.hf.space
-const HF_SPACE_URL = process.env.REACT_APP_HF_SPACE_URL;
+// If we are on a .hf.space domain, we default to using Gradio
+const isHFSpace = typeof window !== "undefined" && window.location.hostname.endsWith(".hf.space");
+const HF_SPACE_URL = process.env.REACT_APP_HF_SPACE_URL || (isHFSpace ? CURRENT_ORIGIN : "");
 
 // When HF_SPACE_URL is set, the frontend routes all calls through Gradio's
 // /api/<fn_name> REST endpoints instead of the FastAPI /api/* routes.
-const useGradio = !!HF_SPACE_URL;
+const useGradio = !!HF_SPACE_URL && isHFSpace;
 
 // ── Axios instance for FastAPI mode ──────────────────────────────────────────
 export const API = `${BACKEND_URL}/api`;
