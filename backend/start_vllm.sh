@@ -17,13 +17,13 @@ fi
 export HSA_OVERRIDE_GFX_VERSION=11.0.0
 export NCCL_DEBUG=ERROR
 
-python3 -m vllm.entrypoints.openai.api_server \
-    --model "$MODEL_NAME" \
+vllm serve "$MODEL_NAME" \
     --host 0.0.0.0 \
     --port "$PORT" \
-    --trust-remote-code \
-    --dtype bfloat16 \
-    --limit-mm-per-prompt image=1 \
-    --gpu-memory-utilization 0.95 \
-    --max-model-len 8192 \
-    --tensor-parallel-size 1
+    --tensor-parallel-size 8 \
+    --enable-expert-parallel \
+    --mm-encoder-tp-mode data \
+    --mm-processor-cache-type shm \
+    --reasoning-parser qwen3 \
+    --enable-prefix-caching \
+    --trust-remote-code

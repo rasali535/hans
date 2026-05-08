@@ -59,8 +59,10 @@ cat > /opt/forgesight/.env << 'EOF'
 MONGO_URL=mongodb://localhost:27017
 DB_NAME=forgesight
 CORS_ORIGINS=*
-# Set your AMD vLLM inference server URL here if running a local model:
-AMD_INFERENCE_URL=http://localhost:8000
+# Set your AMD vLLM inference server URL here:
+AMD_INFERENCE_URL=http://165.245.137.80
+AMD_INFERENCE_TOKEN=DiPipPSZoxb96rcrP7X+B0N5mTTEzxU/ziesgI/Z2NPo9xPKM
+AMD_MODEL_NAME=Qwen/Qwen2-VL-7B-Instruct
 EOF
 
 echo ""
