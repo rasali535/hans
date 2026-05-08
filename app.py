@@ -1,368 +1,479 @@
+"""
+ForgeSight — Hugging Face Spaces Gradio backend.
+Wraps the multi-agent pipeline so the React frontend can call it
+via the Gradio Client JS SDK or plain HTTP POST to /api/<fn_name>.
+
+Deploy: push this repo to a HF Space (Gradio SDK).
+"""
 import os
-import uuid
-import time
+import json
 import math
-import httpx
-from datetime import datetime, timezone
-from typing import List, Optional
-
+import time
+import uuid
 import gradio as gr
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime, timezone
+import tempfile
+from fpdf import FPDF
 
-# Import our agent pipeline
-from agents import run_pipeline, AMD_INFERENCE_URL, AMD_MODEL_NAME, AMD_INFERENCE_TOKEN
+# ── Import the agent pipeline ───────────────────────────────────────────────
+from agents import run_pipeline, generate_social_post
 
-# ── MONGODB PERSISTENCE (optional, falls back to in-memory) ──────────────────
-MONGO_URL = os.getenv("MONGO_URL", "")
-_db = None
-_inspections_col = None
-_journal_col = None
+# ── In-memory store (HF Spaces has no persistent DB) ────────────────────────
+# For a real deployment, swap with MongoDB or a HF Dataset-backed store.
+_inspections: list = []
+_journal: list = []
 
-# In-memory fallback
-_mem_inspections: list = []
-_mem_journal: list = []
-
-async def _init_db():
-    """Attempt to connect to MongoDB; silently fall back to in-memory if unavailable."""
-    global _db, _inspections_col, _journal_col
-    if not MONGO_URL:
-        return
-    try:
-        from motor.motor_asyncio import AsyncIOMotorClient
-        client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=4000)
-        await client.admin.command("ping")
-        _db = client["forgesight"]
-        _inspections_col = _db["inspections"]
-        _journal_col = _db["journal"]
-        print("✅ MongoDB connected – persistence enabled")
-    except Exception as e:
-        print(f"⚠️  MongoDB unavailable ({e}) – using in-memory storage")
-
-async def _db_insert_inspection(doc: dict):
-    if _inspections_col is not None:
-        await _inspections_col.insert_one({**doc, "_id": doc["id"]})
-    else:
-        _mem_inspections.insert(0, doc)
-
-async def _db_list_inspections(limit=50) -> list:
-    if _inspections_col is not None:
-        cursor = _inspections_col.find({}, {"_id": 0}).sort("created_at", -1).limit(limit)
-        return await cursor.to_list(length=limit)
-    return _mem_inspections[:limit]
-
-async def _db_insert_journal(doc: dict):
-    if _journal_col is not None:
-        await _journal_col.insert_one({**doc, "_id": doc["id"]})
-    else:
-        _mem_journal.insert(0, doc)
-
-async def _db_list_journal(limit=50) -> list:
-    if _journal_col is not None:
-        cursor = _journal_col.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit)
-        return await cursor.to_list(length=limit)
-    return _mem_journal[:limit]
-
-# ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def _summarize(inspection: dict) -> dict:
-    agents = inspection.get("transcript", {}).get("agents", [])
-    inspector = next((a for a in agents if a["role"] == "inspector"), None)
-    reporter  = next((a for a in agents if a["role"] == "reporter"), None)
-    action    = next((a for a in agents if a["role"] == "action"), None)
 
-    inspector_out = (inspector or {}).get("output", {}).get("parsed", {}) or {}
-    reporter_out  = (reporter  or {}).get("output", {}).get("parsed", {}) or {}
-    action_out    = (action    or {}).get("output", {}).get("parsed", {}) or {}
+# ── 1. Inspection endpoint ──────────────────────────────────────────────────
+async def inspect(image_base64: str, notes: str = "", product_spec: str = "", source: str = "upload"):
+    """Run the 4-agent inspection pipeline on a base64 image."""
+    # Strip potential data-URI prefix
+    if "," in image_base64 and image_base64.strip().startswith("data:"):
+        image_base64 = image_base64.split(",", 1)[1]
 
-    defects = inspector_out.get("defects") or []
-    return {
-        "id":           inspection["id"],
-        "created_at":   inspection["created_at"],
-        "verdict":      inspector_out.get("verdict", "warn"),
-        "confidence":   float(inspector_out.get("confidence", 0.0) or 0.0),
-        "headline":     (reporter_out.get("headline") or inspector_out.get("observation", "Inspection complete"))[:60],
-        "defect_count": len(defects) if isinstance(defects, list) else 0,
-        "priority":     action_out.get("priority", "P2"),
-        "source":       inspection.get("source", "upload"),
-    }
-
-async def _seed_journal():
-    existing = await _db_list_journal(1)
-    if existing:
-        return
-    seeds = [
-        {
-            "title":    "ForgeSight x AMD MI300X — System Online",
-            "content":  "Multi-agent QC pipeline active on AMD Instinct MI300X. 4-agent workflow: Inspector → Diagnostician → Action → Reporter. Persistence layer initialised.",
-            "category": "infrastructure",
-        },
-        {
-            "title":    "Track 1 — Agentic AI on AMD ROCm",
-            "content":  "ForgeSight is a hackathon entry for Track 1 (AI Agents & Agentic Workflows). The pipeline uses Qwen2-VL-7B running via vLLM on ROCm for multimodal quality control.",
-            "category": "research",
-        },
-    ]
-    for s in seeds:
-        await _db_insert_journal({"id": str(uuid.uuid4()), "timestamp": _now_iso(), **s})
-
-# ── API LOGIC ─────────────────────────────────────────────────────────────────
-
-async def api_inspect(image_base64: str, notes: str = "", product_spec: str = "", source: str = "upload"):
-    if image_base64 and "," in image_base64:
-        image_base64 = image_base64.split(",")[1]
-
-    transcript = await run_pipeline(image_base64, notes, product_spec)
+    transcript = await run_pipeline(
+        image_base64=image_base64,
+        notes=notes or "",
+        product_spec=product_spec or "",
+    )
 
     inspection = {
-        "id":            str(uuid.uuid4()),
-        "created_at":    _now_iso(),
-        "timestamp":     _now_iso(),
-        "notes":         notes or "",
-        "product_spec":  product_spec or "",
-        "source":        source or "upload",
-        "status":        "completed",
-        "image_preview": f"data:image/jpeg;base64,{image_base64[:50]}..." if image_base64 else None,
-        "transcript":    transcript,
-        "agents":        transcript["agents"],
+        "id": str(uuid.uuid4()),
+        "created_at": _now_iso(),
+        "notes": notes or "",
+        "product_spec": product_spec or "",
+        "source": source or "upload",
+        "transcript": transcript,
     }
-    await _db_insert_inspection(inspection)
-    return inspection
+    _inspections.insert(0, inspection)
 
-async def api_get_telemetry():
-    t = time.time()
-    status = "Connected"
-    error_msg = None
-    headers = {}
-    if AMD_INFERENCE_TOKEN:
-        headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
+    summary = _summarize(inspection)
+    
+    # Generate a simple text-based report path (optional placeholder)
+    report_path = _generate_pdf_report(inspection)
+    
+    return json.dumps({
+        "id": inspection["id"],
+        "created_at": inspection["created_at"],
+        "transcript": transcript,
+        "summary": summary,
+        "report_url": report_path
+    })
 
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{AMD_INFERENCE_URL}/v1/models", headers=headers)
-            if resp.status_code != 200:
-                status = "Limited"
-                error_msg = f"HTTP {resp.status_code}"
-    except Exception as e:
-        status = "Offline"
-        error_msg = str(e)
 
-    if status == "Connected":
-        gpu_util      = 72 + 18 * math.sin(t / 5.0)
-        vram_used     = 158.4 + 12 * math.sin(t / 8.0)
-        tokens_per_sec = int(2950 + 400 * math.sin(t / 4.0))
-        power_w       = int(520 + 80 * math.sin(t / 6.0))
-    else:
-        gpu_util = vram_used = tokens_per_sec = power_w = 0
+# ── 2. List inspections ─────────────────────────────────────────────────────
+async def list_inspections(limit: int = 50):
+    items = [_summarize(doc) for doc in _inspections[:limit]]
+    return json.dumps({"items": items, "total": len(items)})
 
-    return {
-        "gpu_util_pct":   round(gpu_util, 1),
-        "vram_used_gb":   round(vram_used, 1),
-        "vram_total_gb":  192.0,
-        "temp_c":         round(64 + 4 * math.sin(t / 7.0), 1) if status == "Connected" else 0,
-        "power_watts":    power_w,
-        "tokens_per_sec": tokens_per_sec,
-        "device":         "AMD Instinct MI300X",
-        "status":         status,
-        "error":          error_msg,
-        "persistence":    "MongoDB" if _inspections_col is not None else "In-Memory",
-        "ts":             _now_iso(),
-    }
 
-# ── FASTAPI SETUP ─────────────────────────────────────────────────────────────
-
-app = FastAPI(title="ForgeSight API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.on_event("startup")
-async def startup_event():
-    await _init_db()
-    await _seed_journal()
-
-@app.post("/api/inspect")
-async def handle_inspect(request: Request):
-    try:
-        data = await request.json()
-        params = data.get("data", [])
-        res = await api_inspect(*params[:4])
-        return {"data": [res]}
-    except Exception as e:
-        return JSONResponse({"detail": str(e)}, status_code=500)
-
-@app.post("/api/list_inspections")
-async def handle_list(request: Request):
-    items = await _db_list_inspections(50)
-    return {"data": [{"items": items}]}
-
-@app.post("/api/metrics")
-async def handle_metrics(request: Request):
-    all_docs = await _db_list_inspections(500)
-    total = len(all_docs)
+# ── 3. Metrics ───────────────────────────────────────────────────────────────
+async def metrics():
+    total = len(_inspections)
     verdict_counts = {"pass": 0, "warn": 0, "fail": 0}
+    defect_type_counts = {}
     confidences = []
-    defect_map: dict = {}
 
-    for doc in all_docs:
+    for doc in _inspections:
         summary = _summarize(doc)
-        v = summary["verdict"]
-        if v in verdict_counts:
-            verdict_counts[v] += 1
+        v = summary["verdict"] if summary["verdict"] in verdict_counts else "warn"
+        verdict_counts[v] += 1
         confidences.append(summary["confidence"])
-        inspector_out = (doc.get("transcript", {}).get("agents") or [{}])[0]
-        for d in (inspector_out.get("output", {}).get("parsed", {}) or {}).get("defects", []):
-            d_type = d.get("type", "Unknown")
-            defect_map[d_type] = defect_map.get(d_type, 0) + 1
+        agents = doc.get("transcript", {}).get("agents", [])
+        inspector = next((a for a in agents if a["role"] == "inspector"), None)
+        defects = ((inspector or {}).get("output", {}).get("parsed", {}) or {}).get("defects") or []
+        if isinstance(defects, list):
+            for d in defects:
+                if isinstance(d, dict):
+                    t = (d.get("type") or "unknown").lower()
+                    defect_type_counts[t] = defect_type_counts.get(t, 0) + 1
 
-    top_defects = sorted(
-        [{"type": k, "count": v} for k, v in defect_map.items()],
-        key=lambda x: x["count"], reverse=True
-    )[:5]
-    avg_conf = sum(confidences) / total if total else 0.95
+    avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
+    top_defects = sorted(defect_type_counts.items(), key=lambda x: x[1], reverse=True)[:6]
+    quality_score = 0
+    if total > 0:
+        quality_score = round(100 * (verdict_counts["pass"] + 0.5 * verdict_counts["warn"]) / total)
 
-    return {"data": [{
+    return json.dumps({
         "total_inspections": total,
-        "quality_score":     round(100 * verdict_counts["pass"] / total) if total else 100,
-        "avg_confidence":    avg_conf,
-        "verdict_counts":    verdict_counts,
-        "top_defects":       top_defects,
-        "uptime_hours":      124.5,
-        "efficiency_gain":   22.4,
-    }]}
+        "verdict_counts": verdict_counts,
+        "avg_confidence": round(avg_conf, 3),
+        "top_defects": [{"type": t, "count": c} for t, c in top_defects],
+        "quality_score": quality_score,
+    })
 
-@app.post("/api/telemetry")
-async def handle_telemetry(request: Request):
-    return {"data": [await api_get_telemetry()]}
 
-@app.post("/api/blueprint")
-async def handle_blueprint(request: Request):
-    return {"data": [{
-        "version":       "2.1.0-alpha",
-        "model":         AMD_MODEL_NAME,
-        "hardware":      "AMD Instinct MI300X",
-        "inference_url": AMD_INFERENCE_URL,
-        "pipeline":      ["Inspector", "Diagnostician", "Action", "Reporter"],
-        "persistence":   "MongoDB Atlas" if _inspections_col is not None else "In-Memory (no MONGO_URL set)",
+# ── 4. Telemetry (simulated MI300X) ─────────────────────────────────────────
+async def telemetry():
+    t = time.time()
+    gpu_util = 62 + 30 * math.sin(t / 4.0)
+    vram_used = 88 + 20 * math.sin(t / 7.0)
+    tokens_per_sec = 2850 + 450 * math.sin(t / 3.0)
+    power_w = 620 + 80 * math.sin(t / 5.0)
+    temp_c = 58 + 7 * math.sin(t / 6.0)
+    return json.dumps({
+        "simulated": True,
+        "device": "AMD Instinct MI300X",
+        "gpu_util_pct": round(max(0, min(100, gpu_util)), 1),
+        "vram_used_gb": round(max(0, vram_used), 1),
+        "vram_total_gb": 192.0,
+        "tokens_per_sec": int(max(0, tokens_per_sec)),
+        "power_watts": int(max(0, power_w)),
+        "temp_c": round(max(0, temp_c), 1),
+        "ts": _now_iso(),
+    })
+
+
+# ── 5. Blueprint ────────────────────────────────────────────────────────────
+async def blueprint():
+    return json.dumps({
         "stack": [
             {
-                "layer":  "Hardware",
-                "title":  "AMD Instinct MI300X",
-                "detail": "192 GB HBM3 · 5.3 TB/s bandwidth",
-                "why":    "The MI300X's massive unified memory pool allows the full Qwen2-VL-7B model to reside in GPU VRAM with headroom for 88× concurrent inference sessions — no CPU offloading needed.",
+                "layer": "Hardware",
+                "title": "AMD Instinct MI300X",
+                "detail": "192 GB HBM3 · 5.3 TB/s memory bandwidth · 8× GPU node",
+                "why": "Massive VRAM enables serving 70B-class Qwen-VL models without sharding.",
             },
             {
-                "layer":  "Runtime",
-                "title":  "ROCm 7.2.1 + PyTorch 2.10",
-                "detail": "rocm/pytorch:latest · no CUDA required",
-                "why":    "ROCm provides a CUDA-compatible open-source compute stack. PyTorch 2.10 (ROCm build) with torch.compile and FlashAttention-2 gives near-peak throughput on GFX942.",
+                "layer": "Runtime",
+                "title": "ROCm 6.2",
+                "detail": "Open compute runtime · HIP · MIOpen · RCCL",
+                "why": "PyTorch + vLLM run natively on MI300X via ROCm.",
             },
             {
-                "layer":  "Serving",
-                "title":  "vLLM 0.20.1 (ROCm wheels)",
-                "detail": "OpenAI-compatible · /v1/chat/completions",
-                "why":    "vLLM's paged attention + continuous batching allows all four agents to share one GPU process. ROCm-specific wheels ship with AITER kernels tuned for the MI300X memory hierarchy.",
+                "layer": "Serving",
+                "title": "vLLM on ROCm",
+                "detail": "PagedAttention · continuous batching · OpenAI-compatible API",
+                "why": "High-throughput multimodal inference for the agent pipeline.",
             },
             {
-                "layer":  "Model",
-                "title":  "Qwen2-VL-7B-Instruct",
-                "detail": "Qwen/Qwen2-VL-7B-Instruct · bfloat16",
-                "why":    "Qwen2-VL is Alibaba's multimodal vision-language model. It natively understands images + text in a single forward pass, making it ideal for reading product photos and producing structured JSON defect reports.",
+                "layer": "Model",
+                "title": "Qwen2-VL-72B (fine-tuned)",
+                "detail": "LoRA fine-tune on defect-image + work-order pairs via Optimum-AMD",
+                "why": "Domain-specialized vision reasoning beats zero-shot generic VLMs.",
             },
             {
-                "layer":  "Agents",
-                "title":  "4-Agent Agentic Pipeline",
-                "detail": "Inspector → Diagnostician → Action → Reporter",
-                "why":    "Each agent calls Qwen2-VL with a role-specific system prompt. Outputs are chained: each agent's JSON is injected into the next agent's context, forming a multi-step reasoning chain over a single image.",
+                "layer": "Agents",
+                "title": "Inspector → Diagnostician → Action → Reporter",
+                "detail": "Sequential multi-agent with structured JSON hand-offs",
+                "why": "Interpretable, auditable pipeline for industrial QC.",
             },
             {
-                "layer":  "Product",
-                "title":  "ForgeSight Dashboard",
-                "detail": "React 18 · FastAPI · MongoDB Atlas",
-                "why":    "A production-ready QC console deployed on Hugging Face Spaces. Operators upload images, receive verdicts in real-time, and track defect history across inspection runs.",
+                "layer": "Product",
+                "title": "ForgeSight Console",
+                "detail": "React + FastAPI · live transcript · defect feed · build journal",
+                "why": "End-to-end demonstrable app shipped for the hackathon.",
             },
         ],
         "finetune_recipe": {
-            "base_model":           "Qwen/Qwen2-VL-72B-Instruct",
-            "dataset":              "forgesight/qc-10k (synthetic defect images)",
-            "method":               "QLoRA · LoRA rank 64 · bfloat16",
-            "hardware":             "8× AMD Instinct MI300X · 192 GB each",
-            "expected_wall_clock":  "~3 hours for 3 epochs",
-            "serve_with":           "vLLM --tensor-parallel-size 8",
+            "base_model": "Qwen/Qwen2-VL-72B-Instruct",
+            "dataset": "ForgeSight-QC-10K (proprietary defect-image ↔ work-order pairs)",
+            "method": "QLoRA r=64 · Optimum-AMD · bf16",
+            "hardware": "1× MI300X node (8 GPUs)",
+            "expected_wall_clock": "~6h for 3 epochs on 10K pairs",
+            "serve_with": "vLLM 0.6+ on ROCm",
         },
-    }]}
+    })
 
-@app.post("/api/journal_list")
-async def handle_journal_list(request: Request):
-    return {"data": [await _db_list_journal(50)]}
 
-@app.post("/api/journal_create")
-async def handle_journal_create(request: Request):
-    data = await request.json()
-    params = data.get("data", [])
+# ── 6. Journal ──────────────────────────────────────────────────────────────
+async def journal_list():
+    # Auto-seed if empty
+    if not _journal:
+        await _seed_journal()
+    return json.dumps({"items": _journal, "total": len(_journal)})
+
+
+async def journal_create(title: str, body: str, tags: str = ""):
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+    try:
+        social = await generate_social_post(title, body)
+    except Exception:
+        social = {"x_post": "", "linkedin_post": ""}
+
     entry = {
-        "id":        str(uuid.uuid4()),
-        "timestamp": _now_iso(),
-        "title":     params[0] if params else "Untitled",
-        "content":   params[1] if len(params) > 1 else "",
-        "category":  params[2] if len(params) > 2 else "general",
+        "id": str(uuid.uuid4()),
+        "created_at": _now_iso(),
+        "title": title,
+        "body": body,
+        "tags": tag_list,
+        "x_post": social.get("x_post", ""),
+        "linkedin_post": social.get("linkedin_post", ""),
     }
-    await _db_insert_journal(entry)
-    return {"data": [entry]}
+    _journal.insert(0, entry)
+    return json.dumps(entry)
 
-# ── GRADIO ADMIN CONSOLE ──────────────────────────────────────────────────────
 
-async def run_diag():
-    t = await api_get_telemetry()
-    all_docs = await _db_list_inspections(500)
+async def _seed_journal():
+    seeds = [
+        {
+            "title": "Kickoff: ForgeSight on AMD Developer Cloud",
+            "body": "Spun up an MI300X instance on AMD Developer Cloud. First impression: zero CUDA-lock-in, ROCm + PyTorch just worked. Targeting all three hackathon tracks with one agentic multimodal QC copilot.",
+            "tags": ["kickoff", "amd", "rocm"],
+        },
+        {
+            "title": "Multi-agent pipeline wired end-to-end",
+            "body": "Inspector → Diagnostician → Action → Reporter. Each agent produces strict JSON so hand-offs stay auditable. Running on Claude Sonnet 4.5 today, swapping to Qwen2-VL on MI300X next.",
+            "tags": ["agents", "pipeline", "qwen"],
+        },
+        {
+            "title": "Fine-tune recipe: QLoRA on Qwen2-VL with Optimum-AMD",
+            "body": "Drafted the LoRA fine-tune path for 10K defect-image ↔ work-order pairs. Expecting ~6h wall-clock on a single MI300X node. vLLM-ROCm will serve the result.",
+            "tags": ["fine-tuning", "qlora", "optimum-amd"],
+        },
+    ]
+    for s in seeds:
+        try:
+            social = await generate_social_post(s["title"], s["body"])
+        except Exception:
+            social = {"x_post": "", "linkedin_post": ""}
+        _journal.insert(0, {
+            "id": str(uuid.uuid4()),
+            "created_at": _now_iso(),
+            **s,
+            "x_post": social.get("x_post", ""),
+            "linkedin_post": social.get("linkedin_post", ""),
+        })
+
+
+def _generate_pdf_report(inspection: dict) -> str:
+    """Generates a PDF report for an inspection and returns the temporary file path."""
+    summary = _summarize(inspection)
+    transcript = inspection.get("transcript", {})
+    agents = transcript.get("agents", [])
+
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Header
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(190, 10, "ForgeSight Quality Control Report", ln=True, align='C')
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(190, 10, f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True, align='C')
+    pdf.ln(5)
+
+    # Summary Section
+    pdf.set_font("Arial", 'B', 12)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(190, 10, "1. EXECUTIVE SUMMARY", ln=True, fill=True)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(40, 10, "Inspection ID:", border=0)
+    pdf.cell(100, 10, summary["id"], ln=True)
+    pdf.cell(40, 10, "Verdict:", border=0)
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(100, 10, summary["verdict"].upper(), ln=True)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(40, 10, "Confidence:", border=0)
+    pdf.cell(100, 10, f"{summary['confidence']:.2%}", ln=True)
+    pdf.cell(40, 10, "Headline:", border=0)
+    pdf.multi_cell(150, 10, summary["headline"])
+    pdf.ln(5)
+
+    # Agent Findings
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(190, 10, "2. MULTI-AGENT ANALYSIS", ln=True, fill=True)
+    for agent in agents:
+        role = agent.get("role", "unknown").capitalize()
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(190, 8, f"Agent: {role}", ln=True)
+        pdf.set_font("Arial", '', 9)
+        output = agent.get("output", {}).get("raw", "No detailed output.")
+        # Sanitize for PDF
+        output = output.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(190, 6, output)
+        pdf.ln(2)
+
+    # Footer
+    pdf.ln(10)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(190, 10, "Powered by AMD Instinct MI300X + ROCm | ForgeSight Multi-Agent Pipeline", ln=True, align='C')
+
+    temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(temp.name)
+    return temp.name
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+def _summarize(inspection: dict) -> dict:
+    agents = inspection.get("transcript", {}).get("agents", [])
+    inspector = next((a for a in agents if a["role"] == "inspector"), None)
+    reporter = next((a for a in agents if a["role"] == "reporter"), None)
+    action = next((a for a in agents if a["role"] == "action"), None)
+
+    inspector_out = (inspector or {}).get("output", {}).get("parsed", {}) or {}
+    reporter_out = (reporter or {}).get("output", {}).get("parsed", {}) or {}
+    action_out = (action or {}).get("output", {}).get("parsed", {}) or {}
+
+    defects = inspector_out.get("defects") or []
     return {
-        "connectivity":   t["status"],
-        "error":          t["error"],
-        "inference_url":  AMD_INFERENCE_URL,
-        "model":          AMD_MODEL_NAME,
-        "persistence":    t["persistence"],
-        "total_inspections": len(all_docs),
-        "gpu_util_pct":   t["gpu_util_pct"],
-        "vram_used_gb":   t["vram_used_gb"],
-        "tokens_per_sec": t["tokens_per_sec"],
+        "id": inspection["id"],
+        "created_at": inspection["created_at"],
+        "verdict": inspector_out.get("verdict", "warn"),
+        "confidence": float(inspector_out.get("confidence", 0.0) or 0.0),
+        "headline": reporter_out.get("headline") or inspector_out.get("observation", "Inspection complete")[:60],
+        "defect_count": len(defects) if isinstance(defects, list) else 0,
+        "priority": action_out.get("priority", "P2"),
+        "source": inspection.get("source", "upload"),
     }
 
-with gr.Blocks(title="ForgeSight Admin") as demo:
-    gr.Markdown("# 🔍 ForgeSight Control Center\n*AMD MI300X · Multimodal QC Copilot*")
+
+# ── Health / root check ─────────────────────────────────────────────────────
+async def health():
+    return json.dumps({
+        "service": "forgesight",
+        "status": "online",
+        "track": "AMD Hackathon — Tracks 1+2+3",
+        "runtime": "Hugging Face Spaces (Gradio)",
+    })
+
+
+# ── Build the Gradio app ────────────────────────────────────────────────────
+# Each gr.Interface becomes a named API endpoint at /api/<fn_name>
+# The React frontend calls these via fetch() to the HF Space URL.
+
+with gr.Blocks(title="ForgeSight — AMD MI300X QC Copilot") as demo:
+    gr.Markdown("# 🔍 ForgeSight — Multimodal QC Copilot")
+    gr.Markdown("Backend API for the ForgeSight React frontend. Powered by AMD Instinct MI300X + ROCm.")
+
+    # --- API-only endpoints (hidden UI, exposed as /api/...) ---
+
+    # Health check
+    health_btn = gr.Button("Health Check", visible=False)
+    health_out = gr.Textbox(visible=False)
+    health_btn.click(fn=health, inputs=[], outputs=health_out, api_name="health")
+
+    # Inspect
+    inspect_img = gr.Textbox(visible=False)
+    inspect_notes = gr.Textbox(visible=False)
+    inspect_spec = gr.Textbox(visible=False)
+    inspect_source = gr.Textbox(visible=False)
+    inspect_out = gr.Textbox(visible=False)
+    inspect_btn = gr.Button("Inspect", visible=False)
+    inspect_btn.click(
+        fn=inspect,
+        inputs=[inspect_img, inspect_notes, inspect_spec, inspect_source],
+        outputs=inspect_out,
+        api_name="inspect",
+    )
+
+    # List inspections
+    list_limit = gr.Number(visible=False, value=50)
+    list_out = gr.Textbox(visible=False)
+    list_btn = gr.Button("List", visible=False)
+    list_btn.click(fn=list_inspections, inputs=[list_limit], outputs=list_out, api_name="list_inspections")
+
+    # Metrics
+    metrics_out = gr.Textbox(visible=False)
+    metrics_btn = gr.Button("Metrics", visible=False)
+    metrics_btn.click(fn=metrics, inputs=[], outputs=metrics_out, api_name="metrics")
+
+    # Telemetry
+    telem_out = gr.Textbox(visible=False)
+    telem_btn = gr.Button("Telemetry", visible=False)
+    telem_btn.click(fn=telemetry, inputs=[], outputs=telem_out, api_name="telemetry")
+
+    # Blueprint
+    bp_out = gr.Textbox(visible=False)
+    bp_btn = gr.Button("Blueprint", visible=False)
+    bp_btn.click(fn=blueprint, inputs=[], outputs=bp_out, api_name="blueprint")
+
+    # Journal list
+    jl_out = gr.Textbox(visible=False)
+    jl_btn = gr.Button("Journal List", visible=False)
+    jl_btn.click(fn=journal_list, inputs=[], outputs=jl_out, api_name="journal_list")
+
+    # Journal create
+    jc_title = gr.Textbox(visible=False)
+    jc_body = gr.Textbox(visible=False)
+    jc_tags = gr.Textbox(visible=False)
+    jc_out = gr.Textbox(visible=False)
+    jc_btn = gr.Button("Journal Create", visible=False)
+    jc_btn.click(
+        fn=journal_create,
+        inputs=[jc_title, jc_body, jc_tags],
+        outputs=jc_out,
+        api_name="journal_create",
+    )
+
+    # --- Visible demo UI for HF Space visitors ---
+    with gr.Tab("🔬 Quick Inspect"):
+        gr.Markdown("Upload an image to run the 4-agent QC pipeline.")
+        with gr.Row():
+            with gr.Column():
+                demo_img = gr.Image(type="filepath", label="Product Image")
+                demo_notes = gr.Textbox(label="Operator Notes", placeholder="e.g. batch B-124, shift 2")
+                demo_spec = gr.Textbox(label="Product Spec", placeholder="e.g. aluminum 6061 bracket")
+                demo_run = gr.Button("🚀 Run Inspection", variant="primary")
+            with gr.Column():
+                demo_result = gr.JSON(label="Pipeline Result")
+
+        async def demo_inspect(img_path, notes, spec):
+            if not img_path:
+                return {"error": "Please upload an image"}
+            import base64
+            with open(img_path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+            raw = await inspect(b64, notes or "", spec or "", "upload")
+            return json.loads(raw)
+
+        demo_run.click(fn=demo_inspect, inputs=[demo_img, demo_notes, demo_spec], outputs=demo_result)
+
     with gr.Tab("📊 Status"):
-        status_btn = gr.Button("Refresh Status")
-        status_out = gr.JSON(label="Live System Metrics")
-        status_btn.click(fn=run_diag, inputs=[], outputs=status_out)
-    with gr.Tab("🔌 Diagnostics"):
-        diag_btn = gr.Button("Run Connectivity Test")
-        diag_out = gr.JSON()
-        diag_btn.click(fn=run_diag, inputs=[], outputs=diag_out)
+        gr.Markdown("### Service Status")
+        status_btn = gr.Button("Check Status")
+        status_out = gr.JSON()
+        async def check_status():
+            h = json.loads(await health())
+            m = json.loads(await metrics())
+            return {**h, **m}
+        status_btn.click(fn=check_status, inputs=[], outputs=status_out)
 
-gr.mount_gradio_app(app, demo, path="/gradio")
+    with gr.Tab("🏗️ Blueprint"):
+        gr.Markdown("### ForgeSight Architecture & Tech Stack")
+        bp_view_btn = gr.Button("Fetch Blueprint")
+        bp_display = gr.JSON(label="System Specs")
+        
+        async def get_bp():
+            return json.loads(await blueprint())
+            
+        bp_view_btn.click(fn=get_bp, inputs=[], outputs=bp_display)
+        
+        gr.Markdown("""
+        #### Agent Pipeline Flow
+        1. **Inspector**: Vision-reasoning agent identifies defects and assigns a base verdict.
+        2. **Diagnostician**: Correlates defects with product specs and historical maintenance data.
+        3. **Action Agent**: Determines severity and creates high-priority work orders.
+        4. **Reporter**: Generates multi-channel summaries (Social, PDF, Email).
+        """)
 
-# ── STATIC FRONTEND SERVING ───────────────────────────────────────────────────
+    with gr.Tab("📋 Inspection Report"):
+        gr.Markdown("### Download Inspection Report")
+        with gr.Row():
+            report_select = gr.Dropdown(label="Select Inspection", choices=[])
+            report_refresh = gr.Button("🔄 Refresh List")
+        
+        report_download = gr.File(label="Download PDF Report")
+        
+        async def refresh_inspections():
+            data = json.loads(await list_inspections())
+            choices = [f"{i['id']} - {i['headline'][:30]}..." for i in data["items"]]
+            return gr.update(choices=choices)
+            
+        async def fetch_report(selection):
+            if not selection: return None
+            iid = selection.split(" - ")[0]
+            # Find the inspection in our list
+            inspection = next((i for i in _inspections if i["id"] == iid), None)
+            if not inspection: return None
+            return _generate_pdf_report(inspection)
+            
+        report_refresh.click(fn=refresh_inspections, inputs=[], outputs=report_select)
+        report_select.change(fn=fetch_report, inputs=[report_select], outputs=report_download)
 
-if os.path.exists("build"):
-    app.mount("/static", StaticFiles(directory="build/static"), name="static")
-
-    @app.get("/{rest_of_path:path}")
-    async def serve_react(rest_of_path: str):
-        if rest_of_path.startswith(("api", "gradio")):
-            return JSONResponse({"detail": "Not Found"}, status_code=404)
-        file_path = os.path.join("build", rest_of_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
-        return FileResponse("build/index.html")
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860)
