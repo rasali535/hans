@@ -25,7 +25,7 @@ AMD_INFERENCE_URL = os.environ.get(
 # Token for the AMD inference server (if required)
 AMD_INFERENCE_TOKEN = os.environ.get(
     "AMD_INFERENCE_TOKEN",
-    "DiPipPSZoxb96rcrP7X+B0N5mTTEzxU/ziesgI/Z2NPo9xPKM"
+    "5peRa6unb0DdXvzB3Pbck48IgNTDmxeJSUvE4NdnhvW70FcaX"
 )
 
 # The model name vLLM is serving (used in the chat/completions request).
@@ -188,9 +188,11 @@ async def _call_amd_vllm(
     # Candidate endpoints
     base_url = AMD_INFERENCE_URL.rstrip("/")
     candidates = [
-        f"{base_url}/v1/chat/completions",
         f"{base_url}/proxy/8000/v1/chat/completions",
+        f"{base_url}/proxy/8001/v1/chat/completions",
         f"{base_url}:8000/v1/chat/completions",
+        f"{base_url}:8001/v1/chat/completions",
+        f"{base_url}/v1/chat/completions",
     ]
 
     headers = {}

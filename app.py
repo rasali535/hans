@@ -201,20 +201,24 @@ async def api_get_telemetry():
     # Candidate endpoints
     base_url = AMD_INFERENCE_URL.rstrip("/")
     candidates = [
-        f"{base_url}/v1/models",
         f"{base_url}/proxy/8000/v1/models",
+        f"{base_url}/proxy/8001/v1/models",
         f"{base_url}:8000/v1/models",
+        f"{base_url}:8001/v1/models",
+        f"{base_url}/v1/models",
     ]
 
     headers = {}
     if AMD_INFERENCE_TOKEN:
+        # Use BOTH header formats for compatibility
         headers["Authorization"] = f"token {AMD_INFERENCE_TOKEN}"
 
     last_err = None
     success_url = None
     for url in candidates:
         try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
+            # Increase timeout to 5s for remote server wake-up
+            async with httpx.AsyncClient(timeout=5.0) as client:
                 test_url = f"{url}?token={AMD_INFERENCE_TOKEN}" if AMD_INFERENCE_TOKEN else url
                 resp = await client.get(test_url, headers=headers)
                 if resp.status_code == 200:
