@@ -1,6 +1,6 @@
 ---
 title: ForgeSight
-emoji: 🔍
+emoji: 🏗️
 colorFrom: red
 colorTo: gray
 sdk: gradio
@@ -8,28 +8,29 @@ sdk_version: 5.29.1
 app_file: app.py
 pinned: true
 license: mit
-short_description: "Multimodal QC Copilot on AMD MI300X + ROCm"
+short_description: "Multimodal Civil QC Copilot on AMD MI300X + ROCm"
 tags:
   - amd
   - rocm
   - mi300x
   - qwen
   - vllm
+  - civil-engineering
   - quality-control
   - agents
 ---
 
-# 🔍 ForgeSight — Multimodal QC Copilot on AMD Instinct™ MI300X
+# 🏗️ ForgeSight — Multimodal QC Copilot on AMD Instinct™ MI300X
 
-ForgeSight is a production-ready **Agentic Quality Control (QC) Pipeline** designed for high-throughput manufacturing environments. Built exclusively for the **AMD + lablab.ai Developer Hackathon**, it leverages the massive 192GB VRAM of the **AMD Instinct MI300X** to run a state-of-the-art multimodal multi-agent workflow.
+ForgeSight is a production-ready **Agentic Quality Control (QC) Pipeline** designed for civil engineering, construction, and infrastructure projects. Built exclusively for the **AMD + lablab.ai Developer Hackathon**, it leverages the massive 192GB VRAM of the **AMD Instinct MI300X** to run a state-of-the-art multimodal multi-agent workflow.
 
 ## 🚀 Key Features
 
-*   **Multimodal Reasoning**: Uses **Qwen2-VL-7B** to "see" and understand complex assembly line defects in a single forward pass.
+*   **Multimodal Reasoning**: Uses **Qwen2-VL-7B** to "see" and understand complex structural defects, safety hazards, and code violations across construction sites, roads, and housing in a single forward pass.
 *   **4-Agent Pipeline**: Chained reasoning workflow:
-    1.  **Inspector** — Identifies surface defects, anomalies, and violations.
+    1.  **Inspector** — Identifies structural anomalies and safety violations.
     2.  **Diagnostician** — Performs industry-literate root-cause analysis.
-    3.  **Action** — Generates prioritized work orders and tool checklists.
+    3.  **Action** — Generates prioritized work orders and tool checklists for site engineers.
     4.  **Reporter** — Summarizes findings into human-readable executive reports.
 *   **MI300X Optimized**: Served via **vLLM on ROCm**, utilizing continuous batching and paged attention for near-instant inference.
 *   **Audit-Ready**: Generates downloadable **PDF QC Audit Reports** for every inspection.
@@ -57,13 +58,13 @@ graph TD
 
 ## 🛠️ Installation & Setup
 
-1.  **Clone the Repo**: `git clone https://github.com/rasali535/hans.git`
+1.  **Clone the Repo**: `git clone https://huggingface.co/spaces/lablab-ai-amd-developer-hackathon/ForgeSight`
 2.  **Install Deps**: `pip install -r requirements.txt`
 3.  **Configure Environment**: Set `AMD_INFERENCE_URL` and `AMD_INFERENCE_TOKEN` in your `.env`.
-4.  **Launch**: `python hf_space/app.py`
+4.  **Launch**: `python app.py`
 
 ## 📊 Performance on AMD
-The MI300X's 5.3 TB/s bandwidth allows ForgeSight to maintain **>2500 tokens/sec** throughput, enabling real-time visual inspection of high-speed manufacturing lines without the latency typical of cloud-based VLM APIs.
+The MI300X's 5.3 TB/s bandwidth allows ForgeSight to maintain **>2500 tokens/sec** throughput, enabling real-time visual inspection of massive infrastructure projects without the latency typical of cloud-based VLM APIs.
 
 ---
 Built by **Hans** for the **AMD Developer Hackathon**.
