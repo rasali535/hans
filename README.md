@@ -24,10 +24,18 @@ tags:
 
 ForgeSight is a production-ready **Agentic Quality Control (QC) Pipeline** designed for civil engineering, construction, and infrastructure projects. Built exclusively for the **AMD + lablab.ai Developer Hackathon**, it leverages the massive 192GB VRAM of the **AMD Instinct MI300X** to run a state-of-the-art multimodal multi-agent workflow.
 
+## 🎯 Hackathon Alignment
+
+ForgeSight was explicitly designed to conquer the core objectives of this hackathon, working end-to-end and showing what AMD's compute stack can unlock:
+
+*   **🤖 Track 1: AI Agents & Agentic Workflows**: We moved far beyond simple RAG. ForgeSight implements a sophisticated, coordinated **4-agent workflow** (Inspector, Diagnostician, Action, Reporter) that automates the complex task of infrastructure quality control, reasoning sequentially to deliver concrete work orders.
+*   **🎨 Track 3: Vision & Multimodal AI**: We process and understand complex high-resolution visual data using the massive memory bandwidth of AMD GPUs. ForgeSight is a true **high-throughput industrial inspection** application using `Qwen2-VL-7B` optimized for ROCm™.
+*   **🚢 Extra Challenge: Ship It + Build in Public**: Not only did we build in public, but we also **built an agent for it**. The pipeline features a 5th silent agent (the Social Agent) that automatically generates punchy, hashtag-ready X and LinkedIn posts for every inspection, tagging `@lablab` and `@AIatAMD`.
+
 ## 🚀 Key Features
 
 *   **Multimodal Reasoning**: Uses **Qwen2-VL-7B** to "see" and understand complex structural defects, safety hazards, and code violations across construction sites, roads, and housing in a single forward pass.
-*   **4-Agent Pipeline**: Chained reasoning workflow:
+*   **Sequential Agentic Pipeline**: Chained reasoning workflow:
     1.  **Inspector** — Identifies structural anomalies and safety violations.
     2.  **Diagnostician** — Performs industry-literate root-cause analysis.
     3.  **Action** — Generates prioritized work orders and tool checklists for site engineers.
