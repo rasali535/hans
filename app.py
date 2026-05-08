@@ -198,18 +198,46 @@ async def api_get_telemetry():
     status = "Connected"
     error_msg = None
     headers = {}
-    if AMD_INFERENCE_TOKEN:
-        headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
+    # Candidate endpoints
+    base_url = AMD_INFERENCE_URL.rstrip("/")
+    candidates = [
+        f"{base_url}/v1/models",
+        f"{base_url}/proxy/8000/v1/models",
+        f"{base_url}:8000/v1/models",
+    ]
 
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(f"{AMD_INFERENCE_URL}/v1/models", headers=headers)
-            if resp.status_code != 200:
-                status = "Limited"
-                error_msg = f"HTTP {resp.status_code}"
-    except Exception as e:
+    headers = {}
+    if AMD_INFERENCE_TOKEN:
+        headers["Authorization"] = f"token {AMD_INFERENCE_TOKEN}"
+
+    last_err = None
+    success_url = None
+    for url in candidates:
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                test_url = f"{url}?token={AMD_INFERENCE_TOKEN}" if AMD_INFERENCE_TOKEN else url
+                resp = await client.get(test_url, headers=headers)
+                if resp.status_code == 200:
+                    status = "Connected"
+                    success_url = url
+                    break
+                
+                # Try Bearer
+                headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
+                resp = await client.get(test_url, headers=headers)
+                if resp.status_code == 200:
+                    status = "Connected"
+                    success_url = url
+                    break
+        except Exception as e:
+            last_err = e
+            status = "Offline"
+            error_msg = str(e)
+            continue
+    
+    if not success_url:
         status = "Offline"
-        error_msg = str(e)
+        error_msg = error_msg or "All candidate URLs failed"
 
     if status == "Connected":
         gpu_util      = 72 + 18 * math.sin(t / 5.0)
