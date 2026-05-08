@@ -185,23 +185,41 @@ async def _call_amd_vllm(
         "temperature": 0.1,  # Low temperature for deterministic structured output
     }
 
-    url = f"{AMD_INFERENCE_URL}/v1/chat/completions"
+    # Candidate endpoints
+    base_url = AMD_INFERENCE_URL.rstrip("/")
+    candidates = [
+        f"{base_url}/v1/chat/completions",
+        f"{base_url}/proxy/8000/v1/chat/completions",
+        f"{base_url}:8000/v1/chat/completions",
+    ]
+
     headers = {}
     if AMD_INFERENCE_TOKEN:
-        headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
-
-    try:
-        async with httpx.AsyncClient(timeout=AMD_TIMEOUT) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
-    except httpx.ConnectError:
-        return None  # Server not reachable → use mock
-    except httpx.TimeoutException:
-        return None  # Server too slow → use mock
-    except Exception:
-        return None  # Any other error → use mock
+        # Try both token and Bearer formats
+        headers["Authorization"] = f"token {AMD_INFERENCE_TOKEN}"
+    
+    last_err = None
+    for url in candidates:
+        try:
+            async with httpx.AsyncClient(timeout=AMD_TIMEOUT) as client:
+                # Add token as param too just in case
+                test_url = f"{url}?token={AMD_INFERENCE_TOKEN}" if AMD_INFERENCE_TOKEN else url
+                resp = await client.post(test_url, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"]
+                
+                # Try Bearer if token failed
+                headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
+                resp = await client.post(test_url, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            last_err = e
+            continue
+    
+    return None  # All candidates failed
 
 
 # ── Agent runner ─────────────────────────────────────────────────────────────
