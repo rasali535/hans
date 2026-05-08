@@ -26,8 +26,8 @@ tags:
 ### ⚡ Live Status (Hackathon Mode)
 - **Primary Inference**: AMD Instinct MI300X (192GB VRAM)
 - **Backend**: FastAPI + vLLM on ROCm
-- **Status**: ❌ **OFFLINE** (Maintenance/Down)
-- **Current Server**: `165.245.137.80` (Maintenance in progress)
+- **Status**: ✅ **ONLINE** (Live Inference Active)
+- **Current Server**: `165.245.137.80` (vLLM via Token Auth)
 
 > **AMD + lablab.ai Hackathon** — Track 2 (AMD Developer Cloud) · Track 1 (AI Agents) · Track 3 (Vision & Multimodal AI)
 
