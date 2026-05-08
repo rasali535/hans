@@ -12,6 +12,8 @@ import time
 import uuid
 import gradio as gr
 from datetime import datetime, timezone
+import tempfile
+from fpdf import FPDF
 
 # ── Import the agent pipeline ───────────────────────────────────────────────
 from agents import run_pipeline, generate_social_post
@@ -50,11 +52,16 @@ async def inspect(image_base64: str, notes: str = "", product_spec: str = "", so
     _inspections.insert(0, inspection)
 
     summary = _summarize(inspection)
+    
+    # Generate a simple text-based report path (optional placeholder)
+    report_path = _generate_pdf_report(inspection)
+    
     return json.dumps({
         "id": inspection["id"],
         "created_at": inspection["created_at"],
         "transcript": transcript,
         "summary": summary,
+        "report_url": report_path
     })
 
 
@@ -233,6 +240,63 @@ async def _seed_journal():
         })
 
 
+def _generate_pdf_report(inspection: dict) -> str:
+    """Generates a PDF report for an inspection and returns the temporary file path."""
+    summary = _summarize(inspection)
+    transcript = inspection.get("transcript", {})
+    agents = transcript.get("agents", [])
+
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Header
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(190, 10, "ForgeSight Quality Control Report", ln=True, align='C')
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(190, 10, f"Generated at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True, align='C')
+    pdf.ln(5)
+
+    # Summary Section
+    pdf.set_font("Arial", 'B', 12)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(190, 10, "1. EXECUTIVE SUMMARY", ln=True, fill=True)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(40, 10, "Inspection ID:", border=0)
+    pdf.cell(100, 10, summary["id"], ln=True)
+    pdf.cell(40, 10, "Verdict:", border=0)
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(100, 10, summary["verdict"].upper(), ln=True)
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(40, 10, "Confidence:", border=0)
+    pdf.cell(100, 10, f"{summary['confidence']:.2%}", ln=True)
+    pdf.cell(40, 10, "Headline:", border=0)
+    pdf.multi_cell(150, 10, summary["headline"])
+    pdf.ln(5)
+
+    # Agent Findings
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(190, 10, "2. MULTI-AGENT ANALYSIS", ln=True, fill=True)
+    for agent in agents:
+        role = agent.get("role", "unknown").capitalize()
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(190, 8, f"Agent: {role}", ln=True)
+        pdf.set_font("Arial", '', 9)
+        output = agent.get("output", {}).get("raw", "No detailed output.")
+        # Sanitize for PDF
+        output = output.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(190, 6, output)
+        pdf.ln(2)
+
+    # Footer
+    pdf.ln(10)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(190, 10, "Powered by AMD Instinct MI300X + ROCm | ForgeSight Multi-Agent Pipeline", ln=True, align='C')
+
+    temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(temp.name)
+    return temp.name
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 def _summarize(inspection: dict) -> dict:
     agents = inspection.get("transcript", {}).get("agents", [])
@@ -367,6 +431,48 @@ with gr.Blocks(title="ForgeSight — AMD MI300X QC Copilot") as demo:
             m = json.loads(await metrics())
             return {**h, **m}
         status_btn.click(fn=check_status, inputs=[], outputs=status_out)
+
+    with gr.Tab("🏗️ Blueprint"):
+        gr.Markdown("### ForgeSight Architecture & Tech Stack")
+        bp_view_btn = gr.Button("Fetch Blueprint")
+        bp_display = gr.JSON(label="System Specs")
+        
+        async def get_bp():
+            return json.loads(await blueprint())
+            
+        bp_view_btn.click(fn=get_bp, inputs=[], outputs=bp_display)
+        
+        gr.Markdown("""
+        #### Agent Pipeline Flow
+        1. **Inspector**: Vision-reasoning agent identifies defects and assigns a base verdict.
+        2. **Diagnostician**: Correlates defects with product specs and historical maintenance data.
+        3. **Action Agent**: Determines severity and creates high-priority work orders.
+        4. **Reporter**: Generates multi-channel summaries (Social, PDF, Email).
+        """)
+
+    with gr.Tab("📋 Inspection Report"):
+        gr.Markdown("### Download Inspection Report")
+        with gr.Row():
+            report_select = gr.Dropdown(label="Select Inspection", choices=[])
+            report_refresh = gr.Button("🔄 Refresh List")
+        
+        report_download = gr.File(label="Download PDF Report")
+        
+        async def refresh_inspections():
+            data = json.loads(await list_inspections())
+            choices = [f"{i['id']} - {i['headline'][:30]}..." for i in data["items"]]
+            return gr.update(choices=choices)
+            
+        async def fetch_report(selection):
+            if not selection: return None
+            iid = selection.split(" - ")[0]
+            # Find the inspection in our list
+            inspection = next((i for i in _inspections if i["id"] == iid), None)
+            if not inspection: return None
+            return _generate_pdf_report(inspection)
+            
+        report_refresh.click(fn=refresh_inspections, inputs=[], outputs=report_select)
+        report_select.change(fn=fetch_report, inputs=[report_select], outputs=report_download)
 
 
 if __name__ == "__main__":
