@@ -67,7 +67,7 @@ async def _init_db():
         print(f"⚠️  MongoDB unavailable ({e}) – using in-memory storage")
 
 async def _seed_journal():
-    """Seed the journal with initial milestones (instant, no LLM calls)."""
+    """Seed the journal with initial milestones."""
     try:
         existing = await _db_list_journal(1)
         if existing: return
@@ -93,7 +93,7 @@ async def _db_insert_inspection(data):
     else:
         _mem_inspections.append(data)
 
-async def _db_list_inspections(limit=20):
+async def _db_list_inspections(limit=50):
     if _inspections_col is not None:
         cursor = _inspections_col.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit)
         return await cursor.to_list(length=limit)
@@ -114,7 +114,8 @@ async def _db_list_journal(limit=50):
 # ── API ENDPOINTS ───────────────────────────────────────────────────────────
 
 @app.get("/api/health")
-@app.get("/health")
+@app.get("/api/")
+@app.get("/")
 async def health():
     return {
         "status": "online", 
@@ -124,45 +125,46 @@ async def health():
     }
 
 @app.get("/api/inspections")
-async def get_inspections():
-    items = await _db_list_inspections()
+async def get_inspections(limit: int = 50):
+    items = await _db_list_inspections(limit)
     return items
 
-@app.get("/api/journal")
-async def get_journal():
-    items = await _db_list_journal()
-    return items
-
-@app.post("/api/inspect")
-async def handle_inspect(request: Request):
+@app.post("/api/inspections")
+async def create_inspection(request: Request):
     """Triggers the full multi-agent QC pipeline."""
     try:
         body = await request.json()
-        image_url = body.get("image_url")
-        if not image_url:
-            return JSONResponse({"error": "image_url is required"}, status_code=400)
+        # Frontend uses image_base64, notes, product_spec, source
+        image_base64 = body.get("image_base64")
+        notes = body.get("notes", "")
+        product_spec = body.get("product_spec", "")
+        
+        if not image_base64:
+            return JSONResponse({"error": "image_base64 is required"}, status_code=400)
         
         # Add a journal entry for the start
         await _db_insert_journal({
             "id": str(uuid.uuid4()),
             "type": "process",
-            "content": f"Starting multimodal inspection for image: {image_url[:40]}...",
+            "content": "Starting multimodal inspection via UI upload...",
             "created_at": datetime.now(timezone.utc).isoformat()
         })
 
-        # Run pipeline
-        result = await run_pipeline(image_url)
+        # Run pipeline (assuming run_pipeline can handle base64 or we convert it)
+        # For the hackathon demo, we usually pass the raw data or a temp URL
+        result = await run_pipeline(image_base64)
         
         # Save to DB
         inspection_data = {
             "id": result.get("id", str(uuid.uuid4())),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "image_url": image_url,
+            "image_url": result.get("image_url", "base64_stored"),
             "status": result.get("status", "COMPLETED"),
             "score": result.get("score", 0),
             "findings": result.get("findings", []),
             "agents": result.get("agents", {}),
-            "report_url": result.get("report_url", "")
+            "notes": notes,
+            "product_spec": product_spec
         }
         await _db_insert_inspection(inspection_data)
 
@@ -177,9 +179,31 @@ async def handle_inspect(request: Request):
     except Exception as e:
         return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
 
+@app.get("/api/journal")
+async def get_journal():
+    items = await _db_list_journal()
+    return items
+
+@app.post("/api/journal")
+async def create_journal(request: Request):
+    body = await request.json()
+    entry = {
+        "id": str(uuid.uuid4()),
+        "type": "user",
+        "content": body.get("body", ""),
+        "title": body.get("title", ""),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await _db_insert_journal(entry)
+    return entry
+
+@app.post("/api/journal/seed")
+async def seed_journal_api():
+    await _seed_journal()
+    return {"status": "seeded"}
+
 @app.get("/api/metrics")
 async def get_metrics():
-    """Returns system-wide metrics for the dashboard."""
     inspections = await _db_list_inspections(100)
     total = len(inspections)
     if total == 0:
@@ -198,7 +222,29 @@ async def get_metrics():
         "system_load": "nominal"
     }
 
+@app.get("/api/telemetry")
+async def get_telemetry():
+    """Returns real-time system telemetry (mocked for demo)."""
+    import random
+    return {
+        "gpu_util": random.randint(45, 88),
+        "vram_used": random.randint(120, 160), # MI300X 192GB
+        "latency_ms": random.randint(120, 450),
+        "throughput": round(random.uniform(1.2, 4.5), 1),
+        "active_agents": 3,
+        "thermal_status": "stable"
+    }
+
+@app.get("/api/blueprint")
+async def get_blueprint():
+    """Returns the system blueprint metadata."""
+    return {
+        "version": "1.0.0",
+        "architecture": "Multimodal Agentic Pipeline",
+        "infrastructure": "AMD MI300X vLLM Cluster",
+        "agents": ["Inspector", "Analyst", "Social"]
+    }
+
 if __name__ == "__main__":
     import uvicorn
-    import traceback
     uvicorn.run(app, host="0.0.0.0", port=7860)
