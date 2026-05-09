@@ -62,23 +62,29 @@ export default function Feed() {
             <span className="fs-label">Verdict distribution</span>
             <span className="fs-mono-small text-zinc-500">ALL TIME</span>
           </div>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={verdictChart}>
-                <XAxis dataKey="name" stroke="#71717A" tick={{ fontFamily: "JetBrains Mono", fontSize: 11 }} axisLine={{ stroke: "#27272A" }} tickLine={false} />
-                <YAxis stroke="#71717A" tick={{ fontFamily: "JetBrains Mono", fontSize: 11 }} axisLine={{ stroke: "#27272A" }} tickLine={false} />
-                <Tooltip
-                  cursor={{ fill: "rgba(237,28,36,0.08)" }}
-                  contentStyle={{ background: "#0A0A0A", border: "1px solid #27272A", fontFamily: "JetBrains Mono" }}
-                  labelStyle={{ color: "#fff" }}
-                />
-                <Bar dataKey="value">
-                  {verdictChart.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-56 w-full relative" style={{ minHeight: '224px' }}>
+            {metrics ? (
+              <ResponsiveContainer width="99%" height={224}>
+                <BarChart data={verdictChart}>
+                  <XAxis dataKey="name" stroke="#71717A" tick={{ fontFamily: "JetBrains Mono", fontSize: 11 }} axisLine={{ stroke: "#27272A" }} tickLine={false} />
+                  <YAxis stroke="#71717A" tick={{ fontFamily: "JetBrains Mono", fontSize: 11 }} axisLine={{ stroke: "#27272A" }} tickLine={false} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(237,28,36,0.08)" }}
+                    contentStyle={{ background: "#0A0A0A", border: "1px solid #27272A", fontFamily: "JetBrains Mono" }}
+                    labelStyle={{ color: "#fff" }}
+                  />
+                  <Bar dataKey="value">
+                    {verdictChart.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full w-full flex items-center justify-center font-mono text-xs text-zinc-600">
+                Loading analytics...
+              </div>
+            )}
           </div>
         </div>
 

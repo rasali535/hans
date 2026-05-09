@@ -158,6 +158,10 @@ async def _call_amd_vllm(
     Returns the assistant message text, or None if the server is unreachable.
     """
     # Build messages array
+    # Clean base64 data: strip prefix if present
+    if image_base64 and "," in image_base64:
+        image_base64 = image_base64.split(",")[1]
+
     if image_base64:
         # Multimodal message with base64 image
         user_content = [
@@ -306,15 +310,31 @@ async def run_pipeline(
         ),
     )
 
-    model_label = AMD_MODEL_NAME
+    # Extract data for summary
+    inspector_data = inspector.get("parsed", {})
+    action_data = action.get("parsed", {})
+    
+    model_label = f"{AMD_MODEL_NAME} on MI300X"
+    
+    # Structure exactly as the frontend expects in Console.jsx / ReportView.jsx
     return {
-        "agents": [
-            {"role": "inspector",     "label": "Inspector Agent",     "model": model_label, "output": inspector},
-            {"role": "diagnostician", "label": "Diagnostician Agent", "model": model_label, "output": diagnostician},
-            {"role": "action",        "label": "Action Agent",        "model": model_label, "output": action},
-            {"role": "reporter",      "label": "Reporter Agent",      "model": model_label, "output": reporter},
-            {"role": "social",        "label": "Social Agent",        "model": model_label, "output": social},
-        ],
+        "id": str(uuid.uuid4()),
+        "status": "COMPLETED",
+        "summary": {
+            "verdict": inspector_data.get("verdict", "warn"),
+            "confidence": float(inspector_data.get("confidence", 0.85)),
+            "defect_count": len(inspector_data.get("defects", [])),
+            "priority": action_data.get("priority", "P2")
+        },
+        "transcript": {
+            "agents": [
+                {"role": "inspector",     "label": "Inspector Agent",     "model": model_label, "output": inspector},
+                {"role": "diagnostician", "label": "Diagnostician Agent", "model": model_label, "output": diagnostician},
+                {"role": "action",        "label": "Action Agent",        "model": model_label, "output": action},
+                {"role": "reporter",      "label": "Reporter Agent",      "model": model_label, "output": reporter},
+                {"role": "social",        "label": "Social Agent",        "model": model_label, "output": social},
+            ]
+        }
     }
 
 

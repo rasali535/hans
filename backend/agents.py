@@ -314,6 +314,8 @@ async def run_pipeline(
     inspector_data = inspector.get("parsed", {})
     action_data = action.get("parsed", {})
     
+    model_label = f"{AMD_MODEL_NAME} on MI300X"
+    
     # Structure exactly as the frontend expects in Console.jsx / ReportView.jsx
     return {
         "id": str(uuid.uuid4()),

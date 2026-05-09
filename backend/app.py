@@ -6,6 +6,12 @@ import httpx
 import traceback
 from datetime import datetime, timezone
 from typing import List, Optional
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load env from .env file
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / ".env")
 
 from fastapi import FastAPI, Request, APIRouter
 from fastapi.responses import JSONResponse
@@ -85,16 +91,35 @@ async def get_inspections(limit: int = 50):
     # Map to the format Feed.jsx expects: created_at, verdict, headline, defect_count, priority, confidence
     items = []
     for d in docs:
-        s = d.get("summary", {})
-        items.append({
-            "id": d.get("id"),
-            "created_at": d.get("timestamp"),
-            "verdict": s.get("verdict", "warn"),
-            "headline": d.get("headline", "Inspection Report"),
-            "defect_count": s.get("defect_count", 0),
-            "priority": s.get("priority", "P3"),
-            "confidence": s.get("confidence", 0.0)
-        })
+        try:
+            s = d.get("summary") or {}
+            
+            # Robust headline extraction
+            headline = d.get("headline")
+            if not headline:
+                try:
+                    agents_list = d.get("transcript", {}).get("agents") or []
+                    # Safety check for index
+                    if len(agents_list) > 3:
+                        headline = agents_list[3].get("output", {}).get("parsed", {}).get("headline")
+                except:
+                    pass
+            
+            if not headline:
+                headline = "Inspection Report"
+
+            items.append({
+                "id": d.get("id"),
+                "created_at": d.get("timestamp") or d.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                "verdict": s.get("verdict", "warn"),
+                "headline": headline,
+                "defect_count": s.get("defect_count", 0),
+                "priority": s.get("priority", "P3"),
+                "confidence": s.get("confidence", 0.0)
+            })
+        except Exception as e:
+            print(f"Error processing document {d.get('id')}: {e}")
+            continue
     return {"items": items}
 
 @router.get("/inspections/{id}")
@@ -222,6 +247,85 @@ async def get_telemetry():
 @router.get("/blueprint")
 async def get_blueprint():
     return {"architecture": "Agentic", "provider": "AMD", "stack": "MI300X/ROCm"}
+
+@router.get("/journal")
+async def get_journal():
+    _, col = await get_db_collections()
+    if col is not None:
+        try:
+            cursor = col.find({}, {"_id": 0}).sort("created_at", -1)
+            items = await cursor.to_list(length=100)
+            return {"items": items}
+        except: pass
+    return {"items": sorted(_mem_journal, key=lambda x: x.get("created_at", ""), reverse=True)}
+
+@router.post("/journal")
+async def create_journal(request: Request):
+    try:
+        body = await request.json()
+        title = body.get("title")
+        content = body.get("body")
+        tags = body.get("tags", [])
+        
+        agents = get_agents()
+        social = await agents.generate_social_post(title, content)
+        
+        entry = {
+            "id": str(uuid.uuid4()),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "title": title,
+            "body": content,
+            "tags": tags,
+            "x_post": social.get("x_post", ""),
+            "linkedin_post": social.get("linkedin_post", "")
+        }
+        
+        _, col = await get_db_collections()
+        if col is not None:
+            await col.insert_one(entry.copy())
+        else:
+            _mem_journal.append(entry)
+        return entry
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@router.post("/journal/seed")
+async def seed_journal():
+    _, col = await get_db_collections()
+    existing_count = 0
+    if col is not None:
+        existing_count = await col.count_documents({})
+    else:
+        existing_count = len(_mem_journal)
+        
+    if existing_count > 0:
+        return {"seeded": 0, "reason": "already seeded"}
+        
+    seeds = [
+        {"title": "ForgeSight Initialization", "body": "Starting the ForgeSight project on AMD MI300X. The vLLM server is responsive and ROCm 6.2 is rock solid.", "tags": ["init", "amd"]},
+        {"title": "Multi-Agent Pipeline Active", "body": "The 4-agent pipeline is now running. Inspector, Diagnostician, Action, and Reporter are communicating via structured JSON.", "tags": ["agents", "pipeline"]}
+    ]
+    
+    agents = get_agents()
+    seeded_items = []
+    for s in seeds:
+        social = await agents.generate_social_post(s["title"], s["body"])
+        entry = {
+            "id": str(uuid.uuid4()),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "title": s["title"],
+            "body": s["body"],
+            "tags": s["tags"],
+            "x_post": social.get("x_post", ""),
+            "linkedin_post": social.get("linkedin_post", "")
+        }
+        if col is not None:
+            await col.insert_one(entry.copy())
+        else:
+            _mem_journal.append(entry)
+        seeded_items.append(entry)
+        
+    return {"seeded": len(seeded_items)}
 
 app.include_router(router, prefix="/api")
 app.include_router(router, prefix="/_/backend/api")
