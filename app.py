@@ -36,7 +36,12 @@ async def _init_db():
         return
     try:
         from motor.motor_asyncio import AsyncIOMotorClient
-        client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
+        import certifi
+        client = AsyncIOMotorClient(
+            MONGO_URL, 
+            serverSelectionTimeoutMS=5000,
+            tlsCAFile=certifi.where()
+        )
         # Verify connection
         await client.admin.command("ping")
         _db = client["forgesight"]
