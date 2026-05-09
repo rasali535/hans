@@ -87,22 +87,35 @@ async def create_inspection(request: Request):
     try:
         body = await request.json()
         image_base64 = body.get("image_base64")
+        notes = body.get("notes", "")
+        product_spec = body.get("product_spec", "")
         if not image_base64:
             return JSONResponse({"error": "image_base64 required"}, status_code=400)
         
         agents = get_agents()
-        result = await agents.run_pipeline(image_base64)
         
+        # Run pipeline
+        result = await agents.run_pipeline(image_base64, notes=notes, product_spec=product_spec)
+        
+        # Save to DB - ensure we include everything the frontend expects
         inspection_data = {
-            "id": result.get("id", str(uuid.uuid4())),
+            **result,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "image_url": result.get("image_url", "base64"),
-            "status": result.get("status", "COMPLETED"),
-            "score": result.get("score", 0),
-            "findings": result.get("findings", []),
-            "agents": result.get("agents", {})
+            "image_url": f"data:image/jpeg;base64,{image_base64}" if "," not in image_base64 else image_base64,
+            "notes": notes,
+            "product_spec": product_spec
         }
         
+        # Generate social post (using the reporter summary as the body)
+        try:
+            social = await agents.generate_social_post(
+                inspection_data.get("headline", "New Inspection"),
+                inspection_data.get("summary", "Complete analysis of project infrastructure.")
+            )
+            inspection_data["social"] = social
+        except:
+            inspection_data["social"] = {"x_post": "", "linkedin_post": ""}
+
         col, _ = await get_db_collections()
         if col is not None:
             await col.insert_one(inspection_data.copy())
