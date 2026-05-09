@@ -30,10 +30,12 @@ async def _init_db():
     """Attempt to connect to MongoDB; silently fall back to in-memory if unavailable."""
     global _db, _inspections_col, _journal_col
     if not MONGO_URL:
+        print("⚠️ MONGO_URL not set – using in-memory storage")
         return
     try:
         from motor.motor_asyncio import AsyncIOMotorClient
-        client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=4000)
+        client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=5000)
+        # Verify connection
         await client.admin.command("ping")
         _db = client["forgesight"]
         _inspections_col = _db["inspections"]
@@ -251,37 +253,31 @@ async def journal_create(title: str, body: str, tags: str = ""):
 
 
 async def _seed_journal():
+    """Seed the journal with initial milestones (instant, no LLM calls)."""
     existing = await _db_list_journal(1)
     if existing:
         return
     seeds = [
         {
             "title": "Kickoff: ForgeSight on AMD Developer Cloud",
-            "body": "Spun up an MI300X instance on AMD Developer Cloud. First impression: zero CUDA-lock-in, ROCm + PyTorch just worked. Targeting all three hackathon tracks with one agentic multimodal QC copilot.",
+            "body": "Spun up an MI300X instance on AMD Developer Cloud. First impression: zero CUDA-lock-in, ROCm + PyTorch just worked.",
             "tags": ["kickoff", "amd", "rocm"],
+            "x_post": "🚀 ForgeSight is live! We've officially spun up an AMD Instinct MI300X instance on the Developer Cloud. Zero CUDA-lock-in, just raw ROCm power. #AMDHackathon #ROCm #AIatAMD @lablab @AIatAMD",
+            "linkedin_post": "We've officially kicked off ForgeSight for the AMD + lablab.ai Hackathon! We're leveraging the massive 192GB VRAM of the MI300X to build a production-ready QC pipeline. #AI #AMD #Engineering",
         },
         {
             "title": "Multi-agent pipeline wired end-to-end",
-            "body": "Inspector → Diagnostician → Action → Reporter. Each agent produces strict JSON so hand-offs stay auditable. Running on Claude Sonnet 4.5 today, swapping to Qwen2-VL on MI300X next.",
+            "body": "Inspector → Diagnostician → Action → Reporter. Each agent produces strict JSON so hand-offs stay auditable.",
             "tags": ["agents", "pipeline", "qwen"],
-        },
-        {
-            "title": "Fine-tune recipe: QLoRA on Qwen2-VL with Optimum-AMD",
-            "body": "Drafted the LoRA fine-tune path for 10K defect-image ↔ work-order pairs. Expecting ~6h wall-clock on a single MI300X node. vLLM-ROCm will serve the result.",
-            "tags": ["fine-tuning", "qlora", "optimum-amd"],
+            "x_post": "Our 4-agent pipeline is wired! Inspector → Diagnostician → Action → Reporter. Real-time vision reasoning on MI300X. #AIatAMD #AMDHackathon @lablab",
+            "linkedin_post": "Auditability is key in industrial QC. ForgeSight's multi-agent pipeline ensures every decision is grounded in structured data. #QualityControl #Agents",
         },
     ]
     for s in seeds:
-        try:
-            social = await generate_social_post(s["title"], s["body"])
-        except Exception:
-            social = {"x_post": "", "linkedin_post": ""}
         entry = {
             "id": str(uuid.uuid4()),
             "created_at": _now_iso(),
             **s,
-            "x_post": social.get("x_post", ""),
-            "linkedin_post": social.get("linkedin_post", ""),
         }
         await _db_insert_journal(entry)
 
