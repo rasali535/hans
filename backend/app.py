@@ -42,11 +42,24 @@ async def get_db_collections():
     try:
         from motor.motor_asyncio import AsyncIOMotorClient
         import certifi
-        client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=2000, tlsCAFile=certifi.where(), tlsAllowInvalidCertificates=True)
+        
+        # Use a more robust connection configuration for serverless environments
+        client_kwargs = {
+            "serverSelectionTimeoutMS": 5000,
+            "connectTimeoutMS": 10000,
+            "socketTimeoutMS": 10000,
+            "tls": True,
+            "tlsCAFile": certifi.where(),
+            "tlsAllowInvalidCertificates": True,
+            "retryWrites": True
+        }
+        
+        client = AsyncIOMotorClient(MONGO_URL, **client_kwargs)
         _db = client["forgesight"]
         _inspections_col = _db["inspections"]
         _journal_col = _db["journal"]
         _db_initialized = True
+        print("✅ Database connection established")
     except Exception as e:
         print(f"❌ Database connection failed: {e}")
         import traceback
