@@ -44,7 +44,10 @@ async def get_db_collections():
         _inspections_col = _db["inspections"]
         _journal_col = _db["journal"]
         _db_initialized = True
-    except:
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+        import traceback
+        traceback.print_exc()
         _db_initialized = True
     return _inspections_col, _journal_col
 
@@ -91,6 +94,7 @@ async def get_inspections(limit: int = 50):
     # Map to the format Feed.jsx expects: created_at, verdict, headline, defect_count, priority, confidence
     items = []
     for d in docs:
+        if not isinstance(d, dict): continue
         try:
             s = d.get("summary") or {}
             
@@ -111,14 +115,14 @@ async def get_inspections(limit: int = 50):
             items.append({
                 "id": d.get("id"),
                 "created_at": d.get("timestamp") or d.get("created_at") or datetime.now(timezone.utc).isoformat(),
-                "verdict": s.get("verdict", "warn"),
-                "headline": headline,
-                "defect_count": s.get("defect_count", 0),
-                "priority": s.get("priority", "P3"),
-                "confidence": s.get("confidence", 0.0)
+                "verdict": str(s.get("verdict", "warn")),
+                "headline": str(headline),
+                "defect_count": int(s.get("defect_count") or 0),
+                "priority": str(s.get("priority", "P3")),
+                "confidence": float(s.get("confidence") or 0.0)
             })
         except Exception as e:
-            print(f"Error processing document {d.get('id')}: {e}")
+            print(f"⚠️ Error processing document {d.get('id')}: {e}")
             continue
     return {"items": items}
 
@@ -206,25 +210,33 @@ async def get_metrics():
     defect_map = {}
     
     for d in docs:
-        s = d.get("summary", {})
-        v = s.get("verdict", "warn").lower()
-        if v in v_counts: v_counts[v] += 1
-        conf_sum += s.get("confidence", 0)
-        
-        # Track defects from inspector
-        agents_list = d.get("transcript", {}).get("agents", [])
-        inspector = next((a for a in agents_list if a["role"] == "inspector"), None)
-        if inspector:
-            for df in inspector.get("output", {}).get("parsed", {}).get("defects", []):
-                dtype = df.get("type", "unknown")
-                defect_map[dtype] = defect_map.get(dtype, 0) + 1
+        if not isinstance(d, dict): continue
+        try:
+            s = d.get("summary", {})
+            v = str(s.get("verdict", "warn")).lower()
+            if v in v_counts: v_counts[v] += 1
+            conf_sum += float(s.get("confidence") or 0.0)
+            
+            # Track defects from inspector
+            agents_list = d.get("transcript", {}).get("agents", [])
+            inspector = next((a for a in agents_list if a["role"] == "inspector"), None)
+            if inspector:
+                for df in inspector.get("output", {}).get("parsed", {}).get("defects", []):
+                    dtype = str(df.get("type", "unknown"))
+                    defect_map[dtype] = defect_map.get(dtype, 0) + 1
+        except:
+            continue
 
     top_defects = [{"type": k, "count": v} for k, v in sorted(defect_map.items(), key=lambda x: x[1], reverse=True)[:5]]
     
+    q_score = 100
+    if total > 0:
+        q_score = round((v_counts["pass"] + v_counts["warn"]*0.5) / total * 100)
+
     return {
         "total_inspections": total,
-        "quality_score": round((v_counts["pass"] + v_counts["warn"]*0.5) / total * 100),
-        "avg_confidence": round(conf_sum / total, 2),
+        "quality_score": q_score,
+        "avg_confidence": round(conf_sum / total, 2) if total > 0 else 0,
         "verdict_counts": v_counts,
         "top_defects": top_defects
     }
