@@ -223,7 +223,7 @@ async def api_get_telemetry():
     url = f"{base_url}/v1/models"
     headers = {}
     if AMD_INFERENCE_TOKEN:
-        headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
+        headers["Authorization"] = f"token {AMD_INFERENCE_TOKEN}"
 
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
