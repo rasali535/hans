@@ -510,7 +510,26 @@ with gr.Blocks(title="ForgeSight Admin") as demo:
 # Mount Gradio
 app = gr.mount_gradio_app(app, demo, path="/gradio")
 
-        return FileResponse("build/index.html")
+# SPA Fallback for React Router
+from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    if full_path.startswith("api/") or full_path.startswith("gradio/"):
+        return JSONResponse({"detail": "Not found"}, status_code=404)
+        
+    build_dir = "build" if os.path.exists("build") else "frontend/build"
+    path = os.path.join(build_dir, full_path)
+    
+    if os.path.isfile(path):
+        return FileResponse(path)
+        
+    index_file = os.path.join(build_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+        
+    return JSONResponse({"detail": "Not found"}, status_code=404)
 
 if __name__ == "__main__":
     import uvicorn
