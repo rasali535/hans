@@ -185,14 +185,13 @@ async def _call_amd_vllm(
         "temperature": 0.1,  # Low temperature for deterministic structured output
     }
 
-    # Candidate endpoints
     base_url = AMD_INFERENCE_URL.rstrip("/")
+    if not base_url.startswith("http"):
+        base_url = f"http://{base_url}"
+    if "/proxy/8000" not in base_url:
+        base_url = f"{base_url}/proxy/8000"
     candidates = [
-        f"{base_url}/proxy/8000/v1/chat/completions",
-        f"{base_url}/proxy/8001/v1/chat/completions",
-        f"{base_url}:8000/v1/chat/completions",
-        f"{base_url}:8001/v1/chat/completions",
-        f"{base_url}/v1/chat/completions",
+        f"{base_url}/v1/chat/completions"
     ]
 
     headers = {}
@@ -297,6 +296,16 @@ async def run_pipeline(
         ),
     )
 
+    # 5) Social (text only)
+    social = await _run_agent(
+        "social",
+        SOCIAL_SYSTEM,
+        (
+            f"INSPECTOR_REPORT:\n{json.dumps(inspector['parsed'])}\n\n"
+            f"REPORTER_SUMMARY:\n{json.dumps(reporter['parsed'])}"
+        ),
+    )
+
     model_label = AMD_MODEL_NAME
     return {
         "agents": [
@@ -304,6 +313,7 @@ async def run_pipeline(
             {"role": "diagnostician", "label": "Diagnostician Agent", "model": model_label, "output": diagnostician},
             {"role": "action",        "label": "Action Agent",        "model": model_label, "output": action},
             {"role": "reporter",      "label": "Reporter Agent",      "model": model_label, "output": reporter},
+            {"role": "social",        "label": "Social Agent",        "model": model_label, "output": social},
         ],
     }
 

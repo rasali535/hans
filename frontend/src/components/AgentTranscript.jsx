@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Eye, Stethoscope, Wrench, FileText, CheckCircle2, AlertTriangle, XCircle, WifiOff } from "lucide-react";
+import { Eye, Stethoscope, Wrench, FileText, Share2, CheckCircle2, AlertTriangle, XCircle, WifiOff, Twitter, Linkedin } from "lucide-react";
 
 const ICONS = {
   inspector:    Eye,
   diagnostician: Stethoscope,
   action:       Wrench,
   reporter:     FileText,
+  social:       Share2,
 };
 
 const VERDICT_CONFIG = {
@@ -178,6 +179,50 @@ function ReporterOutput({ parsed }) {
   );
 }
 
+function SocialOutput({ parsed }) {
+  const xText = parsed?.x_post || "";
+  const linkedInText = parsed?.linkedin_post || "";
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
+      <div className="p-4 border border-white/5 bg-[#141416] rounded-sm fs-rise">
+        <div className="flex items-center gap-2 mb-3">
+          <Twitter className="w-4 h-4 text-[#1DA1F2]" />
+          <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest">X / Twitter</span>
+        </div>
+        <p className="text-xs text-zinc-300 font-mono leading-relaxed">{xText}</p>
+        <div className="mt-4 flex justify-end">
+          <button 
+            onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(xText)}`, '_blank')}
+            className="font-mono text-[10px] px-2 py-1 border border-white/10 hover:bg-white/5 transition-colors text-zinc-400"
+          >
+            Draft Post
+          </button>
+        </div>
+      </div>
+      <div className="p-4 border border-white/5 bg-[#141416] rounded-sm fs-rise">
+        <div className="flex items-center gap-2 mb-3">
+          <Linkedin className="w-4 h-4 text-[#0A66C2]" />
+          <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-widest">LinkedIn</span>
+        </div>
+        <div className="text-[11px] text-zinc-400 font-sans whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+          {linkedInText}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button 
+            onClick={() => {
+              navigator.clipboard.writeText(linkedInText);
+              alert("LinkedIn text copied!");
+            }}
+            className="font-mono text-[10px] px-2 py-1 border border-white/10 hover:bg-white/5 transition-colors text-zinc-400"
+          >
+            Copy Text
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AgentContent({ agent, isMock }) {
   const { role, output } = agent;
   const parsed = output?.parsed || {};
@@ -185,6 +230,7 @@ function AgentContent({ agent, isMock }) {
   if (role === "diagnostician") return <DiagnosticianOutput parsed={parsed} />;
   if (role === "action")        return <ActionOutput parsed={parsed} />;
   if (role === "reporter")      return <ReporterOutput parsed={parsed} />;
+  if (role === "social")        return <SocialOutput parsed={parsed} />;
   return <pre className="font-mono text-xs text-zinc-400 whitespace-pre-wrap break-words">{JSON.stringify(parsed, null, 2)}</pre>;
 }
 

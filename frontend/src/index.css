@@ -49,16 +49,41 @@ code {
     }
 }
 
-@layer base {
-    [data-debug-wrapper="true"] {
-        display: contents !important;
+@layer utilities {
+    .glass {
+        @apply bg-white/[0.03] border border-white/10 backdrop-blur-md;
     }
-    [data-debug-wrapper="true"] > * {
-        margin-left: inherit; margin-right: inherit; margin-top: inherit; margin-bottom: inherit;
-        padding-left: inherit; padding-right: inherit; padding-top: inherit; padding-bottom: inherit;
-        column-gap: inherit; row-gap: inherit; gap: inherit;
-        border-left-width: inherit; border-right-width: inherit; border-top-width: inherit; border-bottom-width: inherit;
-        border-left-style: inherit; border-right-style: inherit; border-top-style: inherit; border-bottom-style: inherit;
-        border-left-color: inherit; border-right-color: inherit; border-top-color: inherit; border-bottom-color: inherit;
+    .fs-glow {
+        box-shadow: 0 0 20px -5px rgba(237, 28, 36, 0.2);
+    }
+    .fs-glow-intense {
+        box-shadow: 0 0 40px -10px rgba(237, 28, 36, 0.4);
+    }
+    .fs-label {
+        @apply font-mono text-[10px] uppercase tracking-widest text-zinc-500;
+    }
+    .fs-chip {
+        @apply font-mono text-[10px] px-2 py-0.5 border rounded-sm;
+    }
+    .fs-chip-pass {
+        @apply border-[#10B981]/30 text-[#10B981] bg-[#10B981]/5;
+    }
+    .fs-chip-fail {
+        @apply border-[#ED1C24]/30 text-[#ED1C24] bg-[#ED1C24]/5;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #333;
+        border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #ED1C24;
     }
 }
+
