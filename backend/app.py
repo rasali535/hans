@@ -16,10 +16,55 @@ from datetime import datetime, timezone
 # ── Import the agent pipeline ───────────────────────────────────────────────
 from agents import run_pipeline, generate_social_post
 
-# ── In-memory store (HF Spaces has no persistent DB) ────────────────────────
-# For a real deployment, swap with MongoDB or a HF Dataset-backed store.
-_inspections: list = []
-_journal: list = []
+# ── MONGODB PERSISTENCE (optional, falls back to in-memory) ──────────────────
+MONGO_URL = os.getenv("MONGO_URL", "")
+_db = None
+_inspections_col = None
+_journal_col = None
+
+# In-memory fallback
+_mem_inspections: list = []
+_mem_journal: list = []
+
+async def _init_db():
+    """Attempt to connect to MongoDB; silently fall back to in-memory if unavailable."""
+    global _db, _inspections_col, _journal_col
+    if not MONGO_URL:
+        return
+    try:
+        from motor.motor_asyncio import AsyncIOMotorClient
+        client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=4000)
+        await client.admin.command("ping")
+        _db = client["forgesight"]
+        _inspections_col = _db["inspections"]
+        _journal_col = _db["journal"]
+        print("✅ MongoDB connected – persistence enabled")
+    except Exception as e:
+        print(f"⚠️  MongoDB unavailable ({e}) – using in-memory storage")
+
+async def _db_insert_inspection(doc: dict):
+    if _inspections_col is not None:
+        await _inspections_col.insert_one({**doc, "_id": doc["id"]})
+    else:
+        _mem_inspections.insert(0, doc)
+
+async def _db_list_inspections(limit=50) -> list:
+    if _inspections_col is not None:
+        cursor = _inspections_col.find({}, {"_id": 0}).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+    return _mem_inspections[:limit]
+
+async def _db_insert_journal(doc: dict):
+    if _journal_col is not None:
+        await _journal_col.insert_one({**doc, "_id": doc["id"]})
+    else:
+        _mem_journal.insert(0, doc)
+
+async def _db_list_journal(limit=50) -> list:
+    if _journal_col is not None:
+        cursor = _journal_col.find({}, {"_id": 0}).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+    return _mem_journal[:limit]
 
 
 def _now_iso() -> str:
@@ -47,7 +92,7 @@ async def inspect(image_base64: str, notes: str = "", product_spec: str = "", so
         "source": source or "upload",
         "transcript": transcript,
     }
-    _inspections.insert(0, inspection)
+    await _db_insert_inspection(inspection)
 
     summary = _summarize(inspection)
     return json.dumps({
@@ -60,18 +105,20 @@ async def inspect(image_base64: str, notes: str = "", product_spec: str = "", so
 
 # ── 2. List inspections ─────────────────────────────────────────────────────
 async def list_inspections(limit: int = 50):
-    items = [_summarize(doc) for doc in _inspections[:limit]]
+    docs = await _db_list_inspections(limit)
+    items = [_summarize(doc) for doc in docs]
     return json.dumps({"items": items, "total": len(items)})
 
 
 # ── 3. Metrics ───────────────────────────────────────────────────────────────
 async def metrics():
-    total = len(_inspections)
+    docs = await _db_list_inspections(500)
+    total = len(docs)
     verdict_counts = {"pass": 0, "warn": 0, "fail": 0}
     defect_type_counts = {}
     confidences = []
 
-    for doc in _inspections:
+    for doc in docs:
         summary = _summarize(doc)
         v = summary["verdict"] if summary["verdict"] in verdict_counts else "warn"
         verdict_counts[v] += 1
@@ -175,10 +222,12 @@ async def blueprint():
 
 # ── 6. Journal ──────────────────────────────────────────────────────────────
 async def journal_list():
+    docs = await _db_list_journal(50)
     # Auto-seed if empty
-    if not _journal:
+    if not docs:
         await _seed_journal()
-    return json.dumps({"items": _journal, "total": len(_journal)})
+        docs = await _db_list_journal(50)
+    return json.dumps({"items": docs, "total": len(docs)})
 
 
 async def journal_create(title: str, body: str, tags: str = ""):
@@ -197,11 +246,14 @@ async def journal_create(title: str, body: str, tags: str = ""):
         "x_post": social.get("x_post", ""),
         "linkedin_post": social.get("linkedin_post", ""),
     }
-    _journal.insert(0, entry)
+    await _db_insert_journal(entry)
     return json.dumps(entry)
 
 
 async def _seed_journal():
+    existing = await _db_list_journal(1)
+    if existing:
+        return
     seeds = [
         {
             "title": "Kickoff: ForgeSight on AMD Developer Cloud",
@@ -224,13 +276,14 @@ async def _seed_journal():
             social = await generate_social_post(s["title"], s["body"])
         except Exception:
             social = {"x_post": "", "linkedin_post": ""}
-        _journal.insert(0, {
+        entry = {
             "id": str(uuid.uuid4()),
             "created_at": _now_iso(),
             **s,
             "x_post": social.get("x_post", ""),
             "linkedin_post": social.get("linkedin_post", ""),
-        })
+        }
+        await _db_insert_journal(entry)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -370,4 +423,9 @@ with gr.Blocks(title="ForgeSight — AMD MI300X QC Copilot") as demo:
 
 
 if __name__ == "__main__":
+    import asyncio
+    # Initialize DB before launching
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(_init_db())
+    
     demo.launch(server_name="0.0.0.0", server_port=7860)
