@@ -230,7 +230,7 @@ async def api_get_telemetry():
             resp = await client.get(url, headers=headers)
             if resp.status_code != 200:
                 status = "Offline"
-                error_msg = f"HTTP {resp.status_code}"
+                error_msg = f"HTTP {resp.status_code} at {url}"
     except Exception as e:
         status = "Offline"
         error_msg = str(e)
