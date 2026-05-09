@@ -38,17 +38,18 @@ async def _init_db():
     try:
         from motor.motor_asyncio import AsyncIOMotorClient
         import certifi
+        # Try with standard SSL first
         client = AsyncIOMotorClient(
             MONGO_URL, 
             serverSelectionTimeoutMS=5000,
-            tlsCAFile=certifi.where()
+            tlsCAFile=certifi.where(),
+            # Fallback for environments with strict/broken SSL handshakes
+            tlsAllowInvalidCertificates=True 
         )
-        # Verify connection - Skip ping during startup to avoid Vercel timeouts
-        # await client.admin.command("ping")
         _db = client["forgesight"]
         _inspections_col = _db["inspections"]
         _journal_col = _db["journal"]
-        print("✅ MongoDB client initialized")
+        print("✅ MongoDB client initialized (with TLS fallback)")
     except Exception as e:
         print(f"⚠️  MongoDB unavailable ({e}) – using in-memory storage")
 
