@@ -50,6 +50,7 @@ Building ForgeSight was a journey through the cutting edge of AMD hardware and a
 To make the agents responsive, we deployed the model using **vLLM** on the **ROCm 6.2** stack.
 *   We utilized **PagedAttention** to handle the high VRAM requirements of the model.
 *   The massive 192GB VRAM of the MI300X allowed us to serve the full model without sharding, maximizing throughput for our concurrent agent calls.
+*   **ROCm Tuning**: To ensure rock-solid stability during multimodal inference and avoid known `HSA_STATUS_ERROR_INVALID_PACKET_FORMAT` bugs with complex attention kernels on the MI300X, we optimized the engine by enforcing eager execution and disabling chunked prefill, resulting in flawless pipeline stability.
 
 ### 2. Designing the Multi-Agent Pipeline
 We implemented a 4-stage sequential pipeline in Python to ensure industrial-grade auditability:
