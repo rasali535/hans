@@ -11,7 +11,10 @@ from dotenv import load_dotenv
 
 # Load env from .env file
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / ".env")
+try:
+    load_dotenv(ROOT_DIR / ".env")
+except:
+    pass
 
 from fastapi import FastAPI, Request, APIRouter
 from fastapi.responses import JSONResponse
@@ -75,9 +78,21 @@ def get_agents():
 
 # ── API ENDPOINTS ───────────────────────────────────────────────────────────
 
-@router.get("/health")
+@router.get("/")
 async def health():
-    return {"status": "online", "db": "active" if _db_initialized else "initializing"}
+    db_status = "active" if _db_initialized else "initializing"
+    if _db_initialized and _inspections_col is None:
+        db_status = "offline (in-memory fallback)"
+    
+    return {
+        "status": "online",
+        "db": db_status,
+        "env_check": {
+            "has_mongo": bool(MONGO_URL),
+            "mongo_prefix": MONGO_URL[:10] + "..." if MONGO_URL else None,
+            "has_inference": bool(os.environ.get("AMD_INFERENCE_URL")),
+        }
+    }
 
 @router.get("/inspections")
 async def get_inspections(limit: int = 50):
@@ -89,7 +104,16 @@ async def get_inspections(limit: int = 50):
             docs = await cursor.to_list(length=limit)
         except: pass
     else:
-        docs = sorted(_mem_inspections, key=lambda x: x.get("timestamp", ""), reverse=True)[:limit]
+        # Robust sorting for in-memory docs
+        try:
+            docs = sorted(
+                [d for d in _mem_inspections if isinstance(d, dict)],
+                key=lambda x: str(x.get("timestamp") or x.get("created_at") or ""),
+                reverse=True
+            )[:limit]
+        except Exception as e:
+            print(f"⚠️ Memory sort failed: {e}")
+            docs = _mem_inspections[:limit]
     
     # Map to the format Feed.jsx expects: created_at, verdict, headline, defect_count, priority, confidence
     items = []
