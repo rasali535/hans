@@ -25,7 +25,7 @@ AMD_INFERENCE_URL = os.environ.get(
 # Token for the AMD inference server (if required)
 AMD_INFERENCE_TOKEN = os.environ.get(
     "AMD_INFERENCE_TOKEN",
-    "5vftP0OtijtjVncSQj9OyA2LlQz7IUEe45GODu3bUzBS5AKVi"
+    "5peRa6unb0DdXvzB3Pbck48IgNTDmxeJSUvE4NdnhvW70FcaX"
 )
 
 # The model name vLLM is serving (used in the chat/completions request).
