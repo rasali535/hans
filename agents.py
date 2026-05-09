@@ -185,16 +185,13 @@ async def _call_amd_vllm(
         "temperature": 0.1,  # Low temperature for deterministic structured output
     }
 
-    # Candidate endpoints
     base_url = AMD_INFERENCE_URL.rstrip("/")
     if not base_url.startswith("http"):
         base_url = f"http://{base_url}"
+    if "/proxy/8000" not in base_url:
+        base_url = f"{base_url}/proxy/8000"
     candidates = [
-        f"{base_url}/proxy/8000/v1/chat/completions",
-        f"{base_url}/proxy/8001/v1/chat/completions",
-        f"{base_url}:8000/v1/chat/completions",
-        f"{base_url}:8001/v1/chat/completions",
-        f"{base_url}/v1/chat/completions",
+        f"{base_url}/v1/chat/completions"
     ]
 
     headers = {}

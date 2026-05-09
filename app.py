@@ -216,10 +216,11 @@ async def api_get_telemetry():
     status = "Connected"
     error_msg = None
     
-    # Try current proxy endpoint
     base_url = AMD_INFERENCE_URL.rstrip('/')
     if not base_url.startswith("http"):
         base_url = f"http://{base_url}"
+    if "/proxy/8000" not in base_url:
+        base_url = f"{base_url}/proxy/8000"
     url = f"{base_url}/v1/models"
     headers = {}
     if AMD_INFERENCE_TOKEN:
