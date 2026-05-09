@@ -19,7 +19,7 @@ import httpx  # async HTTP — lightweight, no extra deps beyond requirements
 # Or use the Jupyter proxy route: http://165.245.143.46/proxy/8000
 AMD_INFERENCE_URL = os.environ.get(
     "AMD_INFERENCE_URL",
-    "http://165.245.137.80"
+    "http://129.212.189.214/proxy/8000"
 ).rstrip("/")
 
 # Token for the AMD inference server (if required)
