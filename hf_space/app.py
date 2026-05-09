@@ -450,6 +450,62 @@ with gr.Blocks(title="ForgeSight Admin") as demo:
         status_btn = gr.Button("Refresh Status")
         status_out = gr.JSON(label="Live System Metrics")
         status_btn.click(fn=run_diag, inputs=[], outputs=status_out)
+    
+    with gr.Tab("📐 Architecture"):
+        gr.Markdown("### ForgeSight Agentic Pipeline Architecture")
+        gr.HTML("""
+        <div style="background: #0d0d10; padding: 20px; border: 1px solid #333; border-radius: 8px; font-family: sans-serif;">
+            <svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+                <!-- Data Flow -->
+                <rect x="50" y="150" width="120" height="60" rx="4" fill="#141416" stroke="#333" />
+                <text x="110" y="185" text-anchor="middle" fill="white" font-size="14">Image Upload</text>
+                
+                <path d="M 170 180 L 220 180" stroke="#ED1C24" stroke-width="2" marker-end="url(#arrow)" />
+                
+                <rect x="220" y="150" width="120" height="60" rx="4" fill="#ED1C24" stroke="#ED1C24" />
+                <text x="280" y="185" text-anchor="middle" fill="white" font-size="14" font-weight="bold">vLLM / MI300X</text>
+                
+                <path d="M 340 180 L 390 180" stroke="#ED1C24" stroke-width="2" marker-end="url(#arrow)" />
+                
+                <!-- Agents -->
+                <rect x="390" y="50" width="100" height="40" rx="4" fill="#141416" stroke="#ED1C24" />
+                <text x="440" y="75" text-anchor="middle" fill="white" font-size="12">Inspector</text>
+                
+                <rect x="390" y="120" width="100" height="40" rx="4" fill="#141416" stroke="#ED1C24" />
+                <text x="440" y="145" text-anchor="middle" fill="white" font-size="12">Diagnostician</text>
+                
+                <rect x="390" y="190" width="100" height="40" rx="4" fill="#141416" stroke="#ED1C24" />
+                <text x="440" y="215" text-anchor="middle" fill="white" font-size="12">Action</text>
+                
+                <rect x="390" y="260" width="100" height="40" rx="4" fill="#141416" stroke="#ED1C24" />
+                <text x="440" y="285" text-anchor="middle" fill="white" font-size="12">Reporter</text>
+                
+                <!-- Connections -->
+                <path d="M 440 90 L 440 120" stroke="#666" stroke-width="1" />
+                <path d="M 440 160 L 440 190" stroke="#666" stroke-width="1" />
+                <path d="M 440 230 L 440 260" stroke="#666" stroke-width="1" />
+                
+                <path d="M 490 155 L 550 155" stroke="#ED1C24" stroke-width="2" marker-end="url(#arrow)" />
+                
+                <rect x="550" y="130" width="150" height="100" rx="4" fill="#141416" stroke="#333" />
+                <text x="625" y="165" text-anchor="middle" fill="white" font-size="14">MongoDB Archival</text>
+                <text x="625" y="190" text-anchor="middle" fill="#666" font-size="12">Persistence Layer</text>
+                
+                <defs>
+                    <marker id="arrow" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto" markerUnits="strokeWidth">
+                        <path d="M0,0 L0,6 L9,3 z" fill="#ED1C24" />
+                    </marker>
+                </defs>
+            </svg>
+        </div>
+        """)
+        gr.Markdown("""
+        ### Stack Details
+        - **Hardware**: AMD Instinct MI300X (192GB VRAM)
+        - **Runtime**: ROCm 6.2 + PyTorch
+        - **Inference**: vLLM (OpenAI-compatible)
+        - **Persistence**: MongoDB Atlas
+        """)
     with gr.Tab("🔌 Diagnostics"):
         diag_btn = gr.Button("Run Connectivity Test")
         diag_out = gr.JSON()

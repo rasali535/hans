@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import mermaid from "mermaid";
 import { forgesight } from "@/lib/api";
 import { Cpu, HardDrive, Server, BookOpen, Bot, Rocket, ArrowDown } from "lucide-react";
 
@@ -12,9 +13,53 @@ const BLUEPRINT_IMG = "https://static.prod-images.emergentagent.com/jobs/d5829a2
 export default function Blueprint() {
   const [data, setData] = useState(null);
 
+  const mermaidRef = useRef(null);
+
   useEffect(() => {
     forgesight.getBlueprint().then((d) => setData(d)).catch(() => {});
+    
+    mermaid.initialize({
+      theme: "dark",
+      themeVariables: {
+        primaryColor: "#ED1C24",
+        primaryTextColor: "#fff",
+        primaryBorderColor: "#ED1C24",
+        lineColor: "#ED1C24",
+        secondaryColor: "#141416",
+        tertiaryColor: "#0A0A0A",
+      },
+    });
   }, []);
+
+  useEffect(() => {
+    if (data && mermaidRef.current) {
+      mermaid.contentLoaded();
+    }
+  }, [data]);
+
+  const pipelineDiagram = `
+graph TD
+    subgraph "Data Acquisition"
+        IMG[Image / Video] -->|Base64| API[FastAPI / Gradio]
+    end
+
+    subgraph "MI300X + ROCm Inference"
+        API -->|vLLM Request| VLLM[vLLM / Qwen2-VL]
+        VLLM -->|JSON Response| API
+    end
+
+    subgraph "Agentic Pipeline"
+        I[Inspector] -->|Defects JSON| D[Diagnostician]
+        D -->|Root Cause JSON| A[Action]
+        A -->|Work Order JSON| R[Reporter]
+        R -->|Final Summary| UI[React UI]
+    end
+
+    API -.-> I
+    classDef default font-family:Inter,color:#fff,fill:#0d0d10,stroke:#333
+    classDef accent fill:#ED1C24,stroke:#ED1C24,color:#fff
+    class VLLM,I,D,A,R accent
+  `;
 
   return (
     <div className="mx-auto max-w-[1400px] px-6 py-10" data-testid="blueprint-page">
@@ -29,10 +74,10 @@ export default function Blueprint() {
             of a factory-floor deployment: latency, privacy, and model memory footprint.
           </p>
         </div>
-        <div className="relative border border-white/10 overflow-hidden min-h-[240px]">
-          <img src={BLUEPRINT_IMG} alt="MI300X architecture" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="absolute bottom-3 left-3 fs-chip fs-chip-fail bg-black/70">AMD INSTINCT MI300X</div>
+        <div className="border border-white/10 bg-[#0A0A0A] p-6 fs-corners flex items-center justify-center min-h-[300px]">
+          <div className="mermaid w-full text-center" ref={mermaidRef}>
+            {pipelineDiagram}
+          </div>
         </div>
       </header>
 

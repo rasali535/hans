@@ -19,13 +19,13 @@ import httpx  # async HTTP — lightweight, no extra deps beyond requirements
 # Or use the Jupyter proxy route: http://165.245.143.46/proxy/8000
 AMD_INFERENCE_URL = os.environ.get(
     "AMD_INFERENCE_URL",
-    "http://165.245.137.80"
+    "http://129.212.189.214"
 ).rstrip("/")
 
 # Token for the AMD inference server (if required)
 AMD_INFERENCE_TOKEN = os.environ.get(
     "AMD_INFERENCE_TOKEN",
-    "5peRa6unb0DdXvzB3Pbck48IgNTDmxeJSUvE4NdnhvW70FcaX"
+    "5vftP0OtijtjVncSQj9OyA2LlQz7IUEe45GODu3bUzBS5AKVi"
 )
 
 # The model name vLLM is serving (used in the chat/completions request).
