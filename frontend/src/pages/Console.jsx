@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import { Upload, Image as ImageIcon, PlayCircle, RotateCcw } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Upload, Image as ImageIcon, PlayCircle, RotateCcw, LayoutList } from "lucide-react";
 import { toast } from "sonner";
 import { forgesight, fileToBase64 } from "@/lib/api";
 import TelemetryWidget from "@/components/TelemetryWidget";
@@ -186,11 +187,20 @@ export default function Console() {
                   <SummaryStat label="Defects" value={summary.defect_count} />
                   <SummaryStat label="Priority" value={summary.priority} />
                 </div>
-                <ReportDownloader
-                  targetRef={reportRef}
-                  inspectionId={result?.id}
-                  disabled={!result}
-                />
+                <div className="flex items-center gap-4">
+                  <Link
+                    to="/feed"
+                    className="fs-chip inline-flex items-center gap-1.5 hover:border-white/40 hover:text-white transition-colors"
+                  >
+                    <LayoutList className="w-3 h-3" />
+                    Feed
+                  </Link>
+                  <ReportDownloader
+                    targetRef={reportRef}
+                    inspectionId={result?.id}
+                    disabled={!result}
+                  />
+                </div>
               </div>
             </div>
           )}

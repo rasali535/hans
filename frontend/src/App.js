@@ -7,6 +7,7 @@ import Console from "@/pages/Console";
 import Feed from "@/pages/Feed";
 import Blueprint from "@/pages/Blueprint";
 import Journal from "@/pages/Journal";
+import ReportView from "@/pages/ReportView";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="/feed" element={<Feed />} />
           <Route path="/blueprint" element={<Blueprint />} />
           <Route path="/journal" element={<Journal />} />
+          <Route path="/report/:id" element={<ReportView />} />
         </Routes>
         <Toaster theme="dark" position="bottom-right" />
       </BrowserRouter>

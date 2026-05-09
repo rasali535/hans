@@ -68,6 +68,13 @@ export const forgesight = {
     return data;
   },
 
+  // GET /api/inspections/:id
+  async getInspection(id) {
+    if (useGradio) return gradioCall("get_inspection", id);
+    const { data } = await api.get(`/inspections/${id}`);
+    return data;
+  },
+
   // GET /api/metrics
   async getMetrics() {
     if (useGradio) return gradioCall("metrics");

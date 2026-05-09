@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { forgesight } from "@/lib/api";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { AlertTriangle, CheckCircle2, XCircle, TrendingUp } from "lucide-react";
@@ -7,6 +7,7 @@ import { AlertTriangle, CheckCircle2, XCircle, TrendingUp } from "lucide-react";
 export default function Feed() {
   const [metrics, setMetrics] = useState(null);
   const [items, setItems] = useState([]);
+  const navigate = useNavigate();
 
   const load = async () => {
     try {
@@ -136,7 +137,11 @@ export default function Feed() {
               </thead>
               <tbody>
                 {items.map((it) => (
-                  <tr key={it.id} className="border-b border-white/5 hover:bg-white/[0.02]">
+                  <tr 
+                    key={it.id} 
+                    onClick={() => navigate(`/report/${it.id}`)}
+                    className="border-b border-white/5 hover:bg-white/[0.04] cursor-pointer transition-colors"
+                  >
                     <Td mono>{new Date(it.created_at).toLocaleString()}</Td>
                     <Td>
                       <span className={`fs-chip fs-chip-${it.verdict}`}>{it.verdict}</span>

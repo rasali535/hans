@@ -316,6 +316,33 @@ async def handle_list(request: Request):
     items = [_summarize(doc) for doc in docs]
     return {"data": [json.dumps({"items": items, "total": len(items)})]}
 
+@app.get("/api/inspections/{inspection_id}")
+async def get_inspection(inspection_id: str):
+    inspection = None
+    if _inspections_col is not None:
+        inspection = await _inspections_col.find_one({"id": inspection_id}, {"_id": 0})
+    else:
+        inspection = next((i for i in _mem_inspections if i["id"] == inspection_id), None)
+    
+    if not inspection:
+        return JSONResponse({"detail": "Inspection not found"}, status_code=404)
+    return inspection
+
+@app.post("/api/get_inspection")
+async def handle_get_inspection(request: Request):
+    data = await request.json()
+    inspection_id = data.get("data", [""])[0]
+    
+    inspection = None
+    if _inspections_col is not None:
+        inspection = await _inspections_col.find_one({"id": inspection_id}, {"_id": 0})
+    else:
+        inspection = next((i for i in _mem_inspections if i["id"] == inspection_id), None)
+    
+    if not inspection:
+        return JSONResponse({"detail": "Inspection not found"}, status_code=404)
+    return {"data": [json.dumps(inspection)]}
+
 @app.post("/api/metrics")
 async def handle_metrics(request: Request):
     docs = await _db_list_inspections(500)
