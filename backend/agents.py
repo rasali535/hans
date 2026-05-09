@@ -25,7 +25,7 @@ AMD_INFERENCE_URL = os.environ.get(
 # Token for the AMD inference server (if required)
 AMD_INFERENCE_TOKEN = os.environ.get(
     "AMD_INFERENCE_TOKEN",
-    "DiPipPSZoxb96rcrP7X+B0N5mTTEzxU/ziesgI/Z2NPo9xPKM"
+    "5peRa6unb0DdXvzB3Pbck48IgNTDmxeJSUvE4NdnhvW70FcaX"
 )
 
 # The model name vLLM is serving (used in the chat/completions request).
@@ -37,19 +37,19 @@ AMD_TIMEOUT = float(os.environ.get("AMD_TIMEOUT", "60"))
 
 # ── System prompts ───────────────────────────────────────────────────────────
 INSPECTOR_SYSTEM = """You are the INSPECTOR agent of ForgeSight — a multimodal quality-control copilot
-running on AMD Instinct MI300X + ROCm. Your job: analyze the submitted product/assembly-line
-image and surface visible defects, anomalies, or violations.
+running on AMD Instinct MI300X + ROCm. Your job: analyze the submitted construction site, road infrastructure, or housing
+image and surface visible structural defects, safety hazards, anomalies, or code violations.
 
 Return ONLY compact JSON with this exact shape (no prose, no code fences):
 {
   "verdict": "pass" | "warn" | "fail",
   "confidence": 0.0-1.0,
   "defects": [
-    {"type": "short category e.g. surface-scratch", "severity": "low|medium|high", "location": "short spatial description", "description": "one sentence"}
+    {"type": "short category e.g. structural-crack", "severity": "low|medium|high", "location": "short spatial description", "description": "one sentence"}
   ],
   "observation": "2-3 sentence plain-english summary of what you see"
 }
-Be precise. If the image shows no manufacturing artifact at all, still describe what is visible
+Be precise. If the image shows no construction/infrastructure issues at all, still describe what is visible
 and mark verdict "warn" with a defect explaining the mismatch."""
 
 
@@ -60,7 +60,7 @@ Return ONLY compact JSON:
 {
   "probable_cause": "one-sentence most likely cause",
   "contributing_factors": ["factor 1", "factor 2", "factor 3"],
-  "affected_process_step": "e.g. CNC milling, injection cooling, weld pass 2"
+  "affected_process_step": "e.g. concrete pouring, asphalt laying, framing"
 }
 Be concrete and industry-literate."""
 
@@ -71,7 +71,7 @@ outputs, draft an actionable work order.
 Return ONLY compact JSON:
 {
   "priority": "P0|P1|P2|P3",
-  "assignee_role": "e.g. line-lead, maintenance-tech, quality-engineer",
+  "assignee_role": "e.g. site-manager, structural-engineer, safety-officer",
   "steps": ["step 1", "step 2", "step 3"],
   "estimated_minutes": integer,
   "parts_or_tools": ["item 1", "item 2"]
@@ -118,24 +118,24 @@ def _mock_response(name: str) -> Dict[str, Any]:
     mocks = {
         "inspector": {
             "verdict": "warn", "confidence": 0.85,
-            "defects": [{"type": "surface-scratch", "severity": "low",
-                         "location": "top-left edge", "description": "Minor scratch visible"}],
-            "observation": "Minor scratch detected on surface. [LOCAL MOCK — AMD server offline]"
+            "defects": [{"type": "concrete-crack", "severity": "medium",
+                         "location": "foundation wall, sector B", "description": "Diagonal hairline crack visible"}],
+            "observation": "Diagonal crack detected on the concrete foundation. [LOCAL MOCK — AMD server offline]"
         },
         "diagnostician": {
-            "probable_cause": "Improper handling during milling. [LOCAL MOCK]",
-            "contributing_factors": ["Machine calibration", "Operator error"],
-            "affected_process_step": "CNC milling"
+            "probable_cause": "Improper curing or settlement issues. [LOCAL MOCK]",
+            "contributing_factors": ["Temperature fluctuation", "Soil settlement"],
+            "affected_process_step": "Concrete curing"
         },
         "action": {
-            "priority": "P2", "assignee_role": "quality-engineer",
-            "steps": ["Inspect machine", "Recalibrate"],
-            "estimated_minutes": 30, "parts_or_tools": ["Calibration kit"]
+            "priority": "P2", "assignee_role": "structural-engineer",
+            "steps": ["Assess crack depth", "Apply epoxy injection"],
+            "estimated_minutes": 120, "parts_or_tools": ["Epoxy resin", "Measurement gauge"]
         },
         "reporter": {
-            "headline": "Minor Scratch Detected [Mock]",
+            "headline": "Foundation Crack Detected [Mock]",
             "summary": "Local mock response — start the AMD vLLM server to use the fine-tuned model.",
-            "tags": ["scratch", "mock", "local"]
+            "tags": ["crack", "concrete", "mock"]
         },
         "social": {
             "x_post": "Testing our pipeline #AMDHackathon",
@@ -185,23 +185,43 @@ async def _call_amd_vllm(
         "temperature": 0.1,  # Low temperature for deterministic structured output
     }
 
-    url = f"{AMD_INFERENCE_URL}/v1/chat/completions"
+    # Candidate endpoints
+    base_url = AMD_INFERENCE_URL.rstrip("/")
+    candidates = [
+        f"{base_url}/proxy/8000/v1/chat/completions",
+        f"{base_url}/proxy/8001/v1/chat/completions",
+        f"{base_url}:8000/v1/chat/completions",
+        f"{base_url}:8001/v1/chat/completions",
+        f"{base_url}/v1/chat/completions",
+    ]
+
     headers = {}
     if AMD_INFERENCE_TOKEN:
-        headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
-
-    try:
-        async with httpx.AsyncClient(timeout=AMD_TIMEOUT) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"]
-    except httpx.ConnectError:
-        return None  # Server not reachable → use mock
-    except httpx.TimeoutException:
-        return None  # Server too slow → use mock
-    except Exception:
-        return None  # Any other error → use mock
+        # Try both token and Bearer formats
+        headers["Authorization"] = f"token {AMD_INFERENCE_TOKEN}"
+    
+    last_err = None
+    for url in candidates:
+        try:
+            async with httpx.AsyncClient(timeout=AMD_TIMEOUT) as client:
+                # Add token as param too just in case
+                test_url = f"{url}?token={AMD_INFERENCE_TOKEN}" if AMD_INFERENCE_TOKEN else url
+                resp = await client.post(test_url, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"]
+                
+                # Try Bearer if token failed
+                headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"
+                resp = await client.post(test_url, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            last_err = e
+            continue
+    
+    return None  # All candidates failed
 
 
 # ── Agent runner ─────────────────────────────────────────────────────────────

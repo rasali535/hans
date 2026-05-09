@@ -77,7 +77,7 @@ export default function Console() {
           Inspection Console
         </h1>
         <p className="text-zinc-400 mt-3 max-w-2xl">
-          Upload a product / assembly-line image. Four agents will collaborate to deliver a verdict.
+          Upload a construction site, road infrastructure, or housing image. Four agents will collaborate to deliver a structural or safety verdict.
         </p>
       </header>
 
@@ -134,23 +134,23 @@ export default function Console() {
 
             <div className="mt-5 space-y-3">
               <div>
-                <div className="fs-label mb-2">Operator Notes</div>
+                <div className="fs-label mb-2">Inspector Notes</div>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  placeholder="e.g. batch B-124, shift 2, CNC line 3…"
+                  placeholder="e.g. site 4, highway foundation, sector B…"
                   className="w-full bg-[#0A0A0A] border border-white/10 focus:border-[#ED1C24] outline-none px-3 py-2 font-mono text-sm text-white placeholder-zinc-600"
                   data-testid="notes-input"
                 />
               </div>
               <div>
-                <div className="fs-label mb-2">Product Spec (optional)</div>
+                <div className="fs-label mb-2">Building/Civil Spec (optional)</div>
                 <textarea
                   value={spec}
                   onChange={(e) => setSpec(e.target.value)}
                   rows={2}
-                  placeholder="e.g. aluminum 6061 bracket, max surface defect 0.2mm…"
+                  placeholder="e.g. concrete grade C30, max surface crack 0.2mm…"
                   className="w-full bg-[#0A0A0A] border border-white/10 focus:border-[#ED1C24] outline-none px-3 py-2 font-mono text-sm text-white placeholder-zinc-600"
                   data-testid="spec-input"
                 />
