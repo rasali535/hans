@@ -77,7 +77,7 @@ export default function ReportView() {
           <div className="border border-white/10 bg-[#141416] p-5 fs-rise" data-testid="summary-panel">
             <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
-                <SummaryStat label="Verdict" value={summary.verdict.toUpperCase()} kind={summary.verdict} />
+                <SummaryStat label="Verdict" value={summary.verdict?.toUpperCase() || "PENDING"} kind={summary.verdict} />
                 <SummaryStat label="Confidence" value={`${Math.round(summary.confidence * 100)}%`} />
                 <SummaryStat label="Defects" value={summary.defect_count} />
                 <SummaryStat label="Priority" value={summary.priority} />
