@@ -45,8 +45,6 @@ async def get_db_collections():
 # ── APP SETUP ───────────────────────────────────────────────────────────────
 
 app = FastAPI(title="ForgeSight Backend")
-
-# We handle routes with and without the /_/backend prefix to support all deployment styles
 router = APIRouter()
 
 app.add_middleware(
@@ -75,12 +73,41 @@ async def health():
 @router.get("/inspections")
 async def get_inspections(limit: int = 50):
     col, _ = await get_db_collections()
+    docs = []
     if col is not None:
         try:
             cursor = col.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit)
-            return await cursor.to_list(length=limit)
+            docs = await cursor.to_list(length=limit)
         except: pass
-    return sorted(_mem_inspections, key=lambda x: x.get("timestamp", ""), reverse=True)[:limit]
+    else:
+        docs = sorted(_mem_inspections, key=lambda x: x.get("timestamp", ""), reverse=True)[:limit]
+    
+    # Map to the format Feed.jsx expects: created_at, verdict, headline, defect_count, priority, confidence
+    items = []
+    for d in docs:
+        s = d.get("summary", {})
+        items.append({
+            "id": d.get("id"),
+            "created_at": d.get("timestamp"),
+            "verdict": s.get("verdict", "warn"),
+            "headline": d.get("headline", "Inspection Report"),
+            "defect_count": s.get("defect_count", 0),
+            "priority": s.get("priority", "P3"),
+            "confidence": s.get("confidence", 0.0)
+        })
+    return {"items": items}
+
+@router.get("/inspections/{id}")
+async def get_inspection(id: str):
+    col, _ = await get_db_collections()
+    if col is not None:
+        try:
+            doc = await col.find_one({"id": id}, {"_id": 0})
+            if doc: return doc
+        except: pass
+    for d in _mem_inspections:
+        if d.get("id") == id: return d
+    return JSONResponse({"error": "Not found"}, status_code=404)
 
 @router.post("/inspections")
 async def create_inspection(request: Request):
@@ -93,25 +120,9 @@ async def create_inspection(request: Request):
         if not image_base64:
             return JSONResponse({"error": "image_base64 required"}, status_code=400)
         
-        print(f"DEBUG: Processing inspection. Image length: {len(image_base64)}")
+        agents = get_agents()
+        result = await agents.run_pipeline(image_base64, notes=notes, product_spec=product_spec)
         
-        try:
-            agents = get_agents()
-            print(f"DEBUG: Agents module loaded: {agents.__name__}")
-        except Exception as e:
-            print(f"DEBUG: Failed to load agents: {str(e)}")
-            return JSONResponse({"error": f"Agent load failed: {str(e)}"}, status_code=500)
-
-        # Run pipeline
-        try:
-            result = await agents.run_pipeline(image_base64, notes=notes, product_spec=product_spec)
-            print(f"DEBUG: Pipeline completed. ID: {result.get('id')}")
-        except Exception as e:
-            tb = traceback.format_exc()
-            print(f"DEBUG: Pipeline error:\n{tb}")
-            return JSONResponse({"error": f"Pipeline execution failed: {str(e)}", "traceback": tb}, status_code=500)
-        
-        # Save to DB - ensure we include everything the frontend expects
         inspection_data = {
             **result,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -120,41 +131,78 @@ async def create_inspection(request: Request):
             "product_spec": product_spec
         }
         
-        # Generate social post (using the reporter summary as the body)
+        # Generate social post
         try:
+            reporter_agent = next((a for a in result["transcript"]["agents"] if a["role"] == "reporter"), None)
+            rep_data = reporter_agent["output"]["parsed"] if reporter_agent else {}
+            
             social = await agents.generate_social_post(
-                inspection_data.get("headline", "New Inspection"),
-                inspection_data.get("summary", "Complete analysis of project infrastructure.")
+                rep_data.get("headline", "Inspection Complete"),
+                rep_data.get("summary", "New analysis from ForgeSight AI.")
             )
             inspection_data["social"] = social
-        except Exception as e:
-            print(f"DEBUG: Social post generation failed: {str(e)}")
+        except:
             inspection_data["social"] = {"x_post": "", "linkedin_post": ""}
 
         col, _ = await get_db_collections()
         if col is not None:
-            try:
-                await col.insert_one(inspection_data.copy())
-            except Exception as e:
-                print(f"DEBUG: MongoDB insert failed: {str(e)}")
+            await col.insert_one(inspection_data.copy())
         else:
             _mem_inspections.append(inspection_data)
             
         return inspection_data
     except Exception as e:
-        tb = traceback.format_exc()
-        print(f"DEBUG: Global inspection error:\n{tb}")
-        return JSONResponse({"error": str(e), "traceback": tb}, status_code=500)
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
 
-@router.get("/journal")
-async def get_journal():
-    _, j_col = await get_db_collections()
-    if j_col is not None:
+@router.get("/metrics")
+async def get_metrics():
+    col, _ = await get_db_collections()
+    docs = []
+    if col is not None:
         try:
-            cursor = j_col.find({}, {"_id": 0}).sort("created_at", -1).limit(50)
-            return await cursor.to_list(length=50)
+            cursor = col.find({}, {"_id": 0}).limit(100)
+            docs = await cursor.to_list(length=100)
         except: pass
-    return sorted(_mem_journal, key=lambda x: x.get("created_at", ""), reverse=True)[:50]
+    else:
+        docs = _mem_inspections[-100:]
+    
+    total = len(docs)
+    if total == 0:
+        return {
+            "total_inspections": 0,
+            "quality_score": 100,
+            "avg_confidence": 0,
+            "verdict_counts": {"pass": 0, "warn": 0, "fail": 0},
+            "top_defects": []
+        }
+    
+    v_counts = {"pass": 0, "warn": 0, "fail": 0}
+    conf_sum = 0
+    defect_map = {}
+    
+    for d in docs:
+        s = d.get("summary", {})
+        v = s.get("verdict", "warn").lower()
+        if v in v_counts: v_counts[v] += 1
+        conf_sum += s.get("confidence", 0)
+        
+        # Track defects from inspector
+        agents_list = d.get("transcript", {}).get("agents", [])
+        inspector = next((a for a in agents_list if a["role"] == "inspector"), None)
+        if inspector:
+            for df in inspector.get("output", {}).get("parsed", {}).get("defects", []):
+                dtype = df.get("type", "unknown")
+                defect_map[dtype] = defect_map.get(dtype, 0) + 1
+
+    top_defects = [{"type": k, "count": v} for k, v in sorted(defect_map.items(), key=lambda x: x[1], reverse=True)[:5]]
+    
+    return {
+        "total_inspections": total,
+        "quality_score": round((v_counts["pass"] + v_counts["warn"]*0.5) / total * 100),
+        "avg_confidence": round(conf_sum / total, 2),
+        "verdict_counts": v_counts,
+        "top_defects": top_defects
+    }
 
 @router.get("/telemetry")
 async def get_telemetry():
@@ -171,20 +219,10 @@ async def get_telemetry():
         "persistence": "Active"
     }
 
-@router.get("/metrics")
-async def get_metrics():
-    # Simple metrics for dashboard
-    return {
-        "avg_score": 88.5,
-        "total_inspections": len(_mem_inspections),
-        "status_distribution": {"PASS": 85, "FAIL": 15}
-    }
-
 @router.get("/blueprint")
 async def get_blueprint():
-    return {"architecture": "Agentic", "provider": "AMD"}
+    return {"architecture": "Agentic", "provider": "AMD", "stack": "MI300X/ROCm"}
 
-# Include router with multiple prefixes to handle Vercel's various routing modes
 app.include_router(router, prefix="/api")
 app.include_router(router, prefix="/_/backend/api")
 app.include_router(router, prefix="")

@@ -310,25 +310,29 @@ async def run_pipeline(
         ),
     )
 
-    model_label = AMD_MODEL_NAME
-    # Flatten important fields for the frontend
+    # Extract data for summary
     inspector_data = inspector.get("parsed", {})
-    reporter_data = reporter.get("parsed", {})
+    action_data = action.get("parsed", {})
     
+    # Structure exactly as the frontend expects in Console.jsx / ReportView.jsx
     return {
         "id": str(uuid.uuid4()),
         "status": "COMPLETED",
-        "score": int(float(inspector_data.get("confidence", 0.8)) * 100),
-        "findings": inspector_data.get("defects", []),
-        "headline": reporter_data.get("headline", "Inspection Complete"),
-        "summary": reporter_data.get("summary", ""),
-        "agents": [
-            {"role": "inspector",     "label": "Inspector Agent",     "model": model_label, "output": inspector},
-            {"role": "diagnostician", "label": "Diagnostician Agent", "model": model_label, "output": diagnostician},
-            {"role": "action",        "label": "Action Agent",        "model": model_label, "output": action},
-            {"role": "reporter",      "label": "Reporter Agent",      "model": model_label, "output": reporter},
-            {"role": "social",        "label": "Social Agent",        "model": model_label, "output": social},
-        ],
+        "summary": {
+            "verdict": inspector_data.get("verdict", "warn"),
+            "confidence": float(inspector_data.get("confidence", 0.85)),
+            "defect_count": len(inspector_data.get("defects", [])),
+            "priority": action_data.get("priority", "P2")
+        },
+        "transcript": {
+            "agents": [
+                {"role": "inspector",     "label": "Inspector Agent",     "model": model_label, "output": inspector},
+                {"role": "diagnostician", "label": "Diagnostician Agent", "model": model_label, "output": diagnostician},
+                {"role": "action",        "label": "Action Agent",        "model": model_label, "output": action},
+                {"role": "reporter",      "label": "Reporter Agent",      "model": model_label, "output": reporter},
+                {"role": "social",        "label": "Social Agent",        "model": model_label, "output": social},
+            ]
+        }
     }
 
 
