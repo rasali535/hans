@@ -296,6 +296,16 @@ async def run_pipeline(
         ),
     )
 
+    # 5) Social (text only)
+    social = await _run_agent(
+        "social",
+        SOCIAL_SYSTEM,
+        (
+            f"INSPECTOR_REPORT:\n{json.dumps(inspector['parsed'])}\n\n"
+            f"REPORTER_SUMMARY:\n{json.dumps(reporter['parsed'])}"
+        ),
+    )
+
     model_label = AMD_MODEL_NAME
     return {
         "agents": [
@@ -303,6 +313,7 @@ async def run_pipeline(
             {"role": "diagnostician", "label": "Diagnostician Agent", "model": model_label, "output": diagnostician},
             {"role": "action",        "label": "Action Agent",        "model": model_label, "output": action},
             {"role": "reporter",      "label": "Reporter Agent",      "model": model_label, "output": reporter},
+            {"role": "social",        "label": "Social Agent",        "model": model_label, "output": social},
         ],
     }
 
