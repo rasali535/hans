@@ -177,21 +177,21 @@ export default function TelemetryWidget() {
         <ArcGauge
           pct={t?.gpu_util_pct ?? 0}
           label="GPU Util"
-          value={t ? `${t.gpu_util_pct.toFixed(0)}%` : "—"}
+          value={t?.gpu_util_pct != null ? `${t.gpu_util_pct.toFixed(0)}%` : "—"}
           icon={Cpu}
           color={isLive ? "#ED1C24" : "#3F3F46"}
         />
         <ArcGauge
           pct={vramPct}
           label="VRAM"
-          value={t ? `${t.vram_used_gb.toFixed(0)}G` : "—"}
+          value={t?.vram_used_gb != null ? `${t.vram_used_gb.toFixed(0)}G` : "—"}
           icon={BarChart3}
           color={isLive ? "#F59E0B" : "#3F3F46"}
         />
         <ArcGauge
           pct={t?.temp_c ? (t.temp_c / 90) * 100 : 0}
           label="Temp"
-          value={t ? `${t.temp_c.toFixed(0)}°C` : "—"}
+          value={t?.temp_c != null ? `${t.temp_c.toFixed(0)}°C` : "—"}
           icon={Thermometer}
           color={isLive ? "#06B6D4" : "#3F3F46"}
         />
@@ -213,7 +213,7 @@ export default function TelemetryWidget() {
         />
         <StatRow
           label="VRAM Used"
-          value={t ? `${t.vram_used_gb.toFixed(1)} / ${t.vram_total_gb} GB` : "—"}
+          value={t?.vram_used_gb != null ? `${t.vram_used_gb.toFixed(1)} / ${t.vram_total_gb} GB` : "—"}
           pct={vramPct}
           color={isLive ? "#F59E0B" : "#3F3F46"}
         />
