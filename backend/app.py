@@ -9,7 +9,8 @@ import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional
 
-import gradio as gr
+from typing import List, Optional
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -303,20 +304,8 @@ async def create_journal(request: Request):
     await _db_insert_journal(entry)
     return entry
 
-# ── GRADIO ADMIN CONSOLE ──────────────────────────────────────────────────────
-
-def _dummy_run():
-    return "ForgeSight Admin active."
-
-with gr.Blocks(title="ForgeSight Admin") as demo:
-    gr.Markdown("# 🔍 ForgeSight Control Center")
-    gr.Markdown("FastAPI backend is serving the REST API. Gradio is for admin tasks.")
-    btn = gr.Button("Ping")
-    out = gr.Textbox()
-    btn.click(fn=_dummy_run, outputs=out)
-
-# Mount Gradio
-app = gr.mount_gradio_app(app, demo, path="/gradio")
+# Mount Gradio - REMOVED for Vercel deployment to stay under size limits
+# app = gr.mount_gradio_app(app, demo, path="/gradio")
 
 if __name__ == "__main__":
     import uvicorn
