@@ -5,6 +5,7 @@ import math
 import httpx
 import json
 import tempfile
+import traceback
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -74,26 +75,39 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 def _summarize(inspection: dict) -> dict:
-    agents = inspection.get("transcript", {}).get("agents", [])
-    inspector = next((a for a in agents if a["role"] == "inspector"), None)
-    reporter  = next((a for a in agents if a["role"] == "reporter"), None)
-    action    = next((a for a in agents if a["role"] == "action"), None)
+    try:
+        agents = inspection.get("transcript", {}).get("agents", [])
+        inspector = next((a for a in agents if a["role"] == "inspector"), None)
+        reporter  = next((a for a in agents if a["role"] == "reporter"), None)
+        action    = next((a for a in agents if a["role"] == "action"), None)
 
-    inspector_out = (inspector or {}).get("output", {}).get("parsed", {}) or {}
-    reporter_out  = (reporter  or {}).get("output", {}).get("parsed", {}) or {}
-    action_out    = (action    or {}).get("output", {}).get("parsed", {}) or {}
+        inspector_out = (inspector or {}).get("output", {}).get("parsed", {}) or {}
+        reporter_out  = (reporter  or {}).get("output", {}).get("parsed", {}) or {}
+        action_out    = (action    or {}).get("output", {}).get("parsed", {}) or {}
 
-    defects = inspector_out.get("defects") or []
-    return {
-        "id":           inspection["id"],
-        "created_at":   inspection["created_at"],
-        "verdict":      inspector_out.get("verdict", "warn"),
-        "confidence":   float(inspector_out.get("confidence", 0.0) or 0.0),
-        "headline":     (reporter_out.get("headline") or inspector_out.get("observation", "Inspection complete"))[:60],
-        "defect_count": len(defects) if isinstance(defects, list) else 0,
-        "priority":     action_out.get("priority", "P2"),
-        "source":       inspection.get("source", "upload"),
-    }
+        defects = inspector_out.get("defects") or []
+        return {
+            "id":           str(inspection.get("id", uuid.uuid4())),
+            "created_at":   str(inspection.get("created_at", _now_iso())),
+            "verdict":      str(inspector_out.get("verdict", "warn")),
+            "confidence":   float(inspector_out.get("confidence") or 0.0),
+            "headline":     str(reporter_out.get("headline") or inspector_out.get("observation", "Inspection complete"))[:60],
+            "defect_count": len(defects) if isinstance(defects, list) else 0,
+            "priority":     str(action_out.get("priority", "P2")),
+            "source":       str(inspection.get("source", "upload")),
+        }
+    except Exception as e:
+        print(f"⚠️ Summary failed for {inspection.get('id')}: {e}")
+        return {
+            "id": str(inspection.get("id", "unknown")),
+            "created_at": _now_iso(),
+            "verdict": "warn",
+            "confidence": 0.0,
+            "headline": "Error parsing results",
+            "defect_count": 0,
+            "priority": "P3",
+            "source": "error"
+        }
 
 def _generate_pdf_report(inspection: dict) -> str:
     """Generates a PDF report for an inspection and returns the temporary file path."""
@@ -308,8 +322,14 @@ async def handle_download_report(inspection_id: str):
 
 @app.post("/api/list_inspections")
 async def handle_list(request: Request):
-    items = await _db_list_inspections(50)
-    return {"data": [{"items": items}]}
+    try:
+        items = await _db_list_inspections(50)
+        summaries = []
+        for i in items:
+            summaries.append(_summarize(i))
+        return {"data": [{"items": summaries}]}
+    except Exception as e:
+        return JSONResponse({"detail": str(e), "traceback": traceback.format_exc()}, status_code=500)
 
 @app.post("/api/metrics")
 async def handle_metrics(request: Request):
