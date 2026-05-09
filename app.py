@@ -510,19 +510,6 @@ with gr.Blocks(title="ForgeSight Admin") as demo:
 # Mount Gradio
 app = gr.mount_gradio_app(app, demo, path="/gradio")
 
-# If build folder exists, serve it
-if os.path.exists("build"):
-    app.mount("/static", StaticFiles(directory="build/static"), name="static")
-
-    @app.get("/{rest_of_path:path}")
-    async def serve_react(rest_of_path: str):
-        # Allow Gradio and API paths through
-        if rest_of_path.startswith(("api", "gradio")):
-             return JSONResponse({"detail": "Not Found"}, status_code=404)
-        
-        file_path = os.path.join("build", rest_of_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
         return FileResponse("build/index.html")
 
 if __name__ == "__main__":
