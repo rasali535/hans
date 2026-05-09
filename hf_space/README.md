@@ -45,4 +45,4 @@ This Gradio-powered FastAPI app acts as the "Brain" of the ForgeSight ecosystem:
 The MI300X's 5.3 TB/s bandwidth allows ForgeSight to maintain **>2500 tokens/sec** throughput, enabling real-time visual inspection without the latency typical of cloud-based APIs.
 
 ---
-Built by **Hans** for the **AMD Developer Hackathon**.
+Built by **Ras Ali Labs** for the **AMD Developer Hackathon**.

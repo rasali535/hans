@@ -102,4 +102,4 @@ We implemented a 4-stage sequential pipeline in Python to ensure industrial-grad
 The MI300X's 5.3 TB/s bandwidth allows ForgeSight to maintain **>2500 tokens/sec** throughput, enabling real-time visual inspection of massive infrastructure projects without the latency typical of cloud-based VLM APIs.
 
 ---
-Built by **Hans** for the **AMD Developer Hackathon**.
+Built by **Ras Ali Labs** for the **AMD Developer Hackathon**.
