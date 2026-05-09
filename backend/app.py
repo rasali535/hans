@@ -43,12 +43,12 @@ async def _init_db():
             serverSelectionTimeoutMS=5000,
             tlsCAFile=certifi.where()
         )
-        # Verify connection
-        await client.admin.command("ping")
+        # Verify connection - Skip ping during startup to avoid Vercel timeouts
+        # await client.admin.command("ping")
         _db = client["forgesight"]
         _inspections_col = _db["inspections"]
         _journal_col = _db["journal"]
-        print("✅ MongoDB connected – persistence enabled")
+        print("✅ MongoDB client initialized")
     except Exception as e:
         print(f"⚠️  MongoDB unavailable ({e}) – using in-memory storage")
 
