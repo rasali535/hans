@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -7,6 +8,7 @@ import logging
 import math
 import time
 import uuid
+import traceback
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Any, Dict
@@ -79,14 +81,14 @@ def _summarize(inspection: Dict[str, Any]) -> Dict[str, Any]:
 
     defects = inspector_out.get("defects") or []
     return {
-        "id": inspection["id"],
-        "created_at": inspection["created_at"],
-        "verdict": inspector_out.get("verdict", "warn"),
-        "confidence": float(inspector_out.get("confidence", 0.0) or 0.0),
-        "headline": reporter_out.get("headline") or inspector_out.get("observation", "Inspection complete")[:60],
+        "id":           inspection.get("id", str(uuid.uuid4())),
+        "created_at":   inspection.get("created_at") or inspection.get("timestamp") or _now_iso(),
+        "verdict":      str(inspector_out.get("verdict", "warn")),
+        "confidence":   float(inspector_out.get("confidence") or 0.0),
+        "headline":     str(reporter_out.get("headline") or inspector_out.get("observation", "Inspection complete"))[:60],
         "defect_count": len(defects) if isinstance(defects, list) else 0,
-        "priority": action_out.get("priority", "P2"),
-        "source": inspection.get("source", "upload"),
+        "priority":     str(action_out.get("priority", "P2")),
+        "source":       str(inspection.get("source", "upload")),
     }
 
 
@@ -130,11 +132,18 @@ async def create_inspection(payload: InspectionCreate):
 
 @api_router.get("/inspections")
 async def list_inspections(limit: int = 50):
-    cursor = db.inspections.find({}, {"_id": 0}).sort("created_at", -1).limit(limit)
-    items = []
-    async for doc in cursor:
-        items.append(_summarize(doc))
-    return {"items": items, "total": len(items)}
+    try:
+        cursor = db.inspections.find({}, {"_id": 0}).sort("created_at", -1).limit(limit)
+        items = []
+        async for doc in cursor:
+            try:
+                items.append(_summarize(doc))
+            except Exception as e:
+                logger.warning(f"Failed to summarize doc: {e}")
+        return {"items": items, "total": len(items)}
+    except Exception as e:
+        logger.error(f"List inspections failed: {e}")
+        return JSONResponse({"error": str(e), "traceback": traceback.format_exc()}, status_code=500)
 
 
 @api_router.get("/inspections/{inspection_id}")
