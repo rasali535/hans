@@ -89,13 +89,27 @@ async def create_inspection(request: Request):
         image_base64 = body.get("image_base64")
         notes = body.get("notes", "")
         product_spec = body.get("product_spec", "")
+        
         if not image_base64:
             return JSONResponse({"error": "image_base64 required"}, status_code=400)
         
-        agents = get_agents()
+        print(f"DEBUG: Processing inspection. Image length: {len(image_base64)}")
         
+        try:
+            agents = get_agents()
+            print(f"DEBUG: Agents module loaded: {agents.__name__}")
+        except Exception as e:
+            print(f"DEBUG: Failed to load agents: {str(e)}")
+            return JSONResponse({"error": f"Agent load failed: {str(e)}"}, status_code=500)
+
         # Run pipeline
-        result = await agents.run_pipeline(image_base64, notes=notes, product_spec=product_spec)
+        try:
+            result = await agents.run_pipeline(image_base64, notes=notes, product_spec=product_spec)
+            print(f"DEBUG: Pipeline completed. ID: {result.get('id')}")
+        except Exception as e:
+            tb = traceback.format_exc()
+            print(f"DEBUG: Pipeline error:\n{tb}")
+            return JSONResponse({"error": f"Pipeline execution failed: {str(e)}", "traceback": tb}, status_code=500)
         
         # Save to DB - ensure we include everything the frontend expects
         inspection_data = {
@@ -113,17 +127,24 @@ async def create_inspection(request: Request):
                 inspection_data.get("summary", "Complete analysis of project infrastructure.")
             )
             inspection_data["social"] = social
-        except:
+        except Exception as e:
+            print(f"DEBUG: Social post generation failed: {str(e)}")
             inspection_data["social"] = {"x_post": "", "linkedin_post": ""}
 
         col, _ = await get_db_collections()
         if col is not None:
-            await col.insert_one(inspection_data.copy())
+            try:
+                await col.insert_one(inspection_data.copy())
+            except Exception as e:
+                print(f"DEBUG: MongoDB insert failed: {str(e)}")
         else:
             _mem_inspections.append(inspection_data)
+            
         return inspection_data
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        tb = traceback.format_exc()
+        print(f"DEBUG: Global inspection error:\n{tb}")
+        return JSONResponse({"error": str(e), "traceback": tb}, status_code=500)
 
 @router.get("/journal")
 async def get_journal():
