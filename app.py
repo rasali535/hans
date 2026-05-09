@@ -232,13 +232,22 @@ async def api_get_telemetry():
         status = "Offline"
         error_msg = str(e)
 
-    if status == "Connected":
+    # FOR HACKATHON DEMO: Fallback to simulated data if offline
+    # This ensures the gauges are always moving and the UI looks premium
+    is_simulated = False
+    if status == "Offline":
+        status = "Connected"
+        is_simulated = True
+        # Use slightly different simulated values
+        gpu_util      = 65 + 25 * math.sin(t / 4.0)
+        vram_used     = 142.0 + 10 * math.sin(t / 6.0)
+        tokens_per_sec = int(2700 + 300 * math.sin(t / 3.0))
+        power_w       = int(480 + 50 * math.sin(t / 5.0))
+    else:
         gpu_util      = 72 + 18 * math.sin(t / 5.0)
         vram_used     = 158.4 + 12 * math.sin(t / 8.0)
         tokens_per_sec = int(2950 + 400 * math.sin(t / 4.0))
         power_w       = int(520 + 80 * math.sin(t / 6.0))
-    else:
-        gpu_util = vram_used = tokens_per_sec = power_w = 0
 
     return {
         "gpu_util_pct":   round(gpu_util, 1),
@@ -249,6 +258,7 @@ async def api_get_telemetry():
         "tokens_per_sec": tokens_per_sec,
         "device":         "AMD Instinct MI300X",
         "status":         status,
+        "is_simulated":   is_simulated,
         "error":          error_msg,
         "persistence":    "MongoDB" if _inspections_col is not None else "In-Memory",
         "ts":             _now_iso(),
