@@ -217,7 +217,10 @@ async def api_get_telemetry():
     error_msg = None
     
     # Try current proxy endpoint
-    url = f"{AMD_INFERENCE_URL.rstrip('/')}/v1/models"
+    base_url = AMD_INFERENCE_URL.rstrip('/')
+    if not base_url.startswith("http"):
+        base_url = f"http://{base_url}"
+    url = f"{base_url}/v1/models"
     headers = {}
     if AMD_INFERENCE_TOKEN:
         headers["Authorization"] = f"Bearer {AMD_INFERENCE_TOKEN}"

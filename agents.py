@@ -187,6 +187,8 @@ async def _call_amd_vllm(
 
     # Candidate endpoints
     base_url = AMD_INFERENCE_URL.rstrip("/")
+    if not base_url.startswith("http"):
+        base_url = f"http://{base_url}"
     candidates = [
         f"{base_url}/proxy/8000/v1/chat/completions",
         f"{base_url}/proxy/8001/v1/chat/completions",
