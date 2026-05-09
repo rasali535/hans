@@ -57,6 +57,17 @@ async def get_db_collections():
 # ── APP SETUP ───────────────────────────────────────────────────────────────
 
 app = FastAPI(title="ForgeSight Backend")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    print(f"❌ GLOBAL ERROR: {exc}")
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc), "traceback": traceback.format_exc()},
+    )
+
 router = APIRouter()
 
 app.add_middleware(
